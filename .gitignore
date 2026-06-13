@@ -49,3 +49,4 @@ Packaged/
 # Crash logs
 *.log
 *.dmp
+.vsconfig
