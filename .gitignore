@@ -1,0 +1,51 @@
+# Unreal Engine .gitignore
+
+# Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.VC.db
+*.VC.opendb
+*.opensdf
+*.sdf
+*.sln
+*.suo
+*.opendb
+*.userprefs
+
+# Compiled source files
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+
+# Project-generated files
+*.xcodeproj
+*.xcworkspace
+
+# Unreal build / make files
+Makefile
+CMakeLists.txt
+.ignore
+
+# Plugin build artifacts
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Packaged builds
+Packaged/
+
+# Crash logs
+*.log
+*.dmp
