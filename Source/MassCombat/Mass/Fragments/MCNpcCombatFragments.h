@@ -28,16 +28,16 @@ struct FMCNpcAnimStateFragment : public FMassFragment
 
 	TWeakObjectPtr<UAnimToTextureDataAsset> AnimData;
 
-	// 게임플레이가 요청한 몽타주(없으면 로코모션). 이 프래그먼트는 "공격" 같은 게임플레이 의미를 모른다.
 	TWeakObjectPtr<UAnimMontage> ActiveMontage;
 
 	float GlobalStartTime = 0.f;
 
 	float PlayRate = 1.f;
 
+	float CurrentFrame = 0.f;
+
 	int32 StateIndex = 0;
 
-	// 요청된 몽타주에 대응하는 VAT 상태 인덱스 (INDEX_NONE = 요청 없음)
 	int32 ActiveMontageStateIndex = INDEX_NONE;
 
 	uint8 bSwappedThisFrame : 1 = 0;

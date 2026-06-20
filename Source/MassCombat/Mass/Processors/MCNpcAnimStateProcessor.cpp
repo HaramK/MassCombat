@@ -9,7 +9,7 @@
 #include "MassRepresentationFragments.h"
 #include "MassRepresentationTypes.h"
 #include "MassActorSubsystem.h"
-#include "DrawDebugHelpers.h" // TODO(debug): 임시 — 확인 후 제거
+#include "VisualLogger/VisualLogger.h"
 
 UMCNpcAnimStateProcessor::UMCNpcAnimStateProcessor()
 	: EntityQuery(*this)
@@ -36,7 +36,7 @@ void UMCNpcAnimStateProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 	UWorld* World = EntityManager.GetWorld();
 	const float GlobalTime = World ? World->GetTimeSeconds() : 0.f;
 
-	EntityQuery.ForEachEntityChunk(Context, [GlobalTime, World](FMassExecutionContext& Ctx)
+	EntityQuery.ForEachEntityChunk(Context, [this, GlobalTime](FMassExecutionContext& Ctx)
 	{
 		const FMCNpcCombatParams& Params = Ctx.GetConstSharedFragment<FMCNpcCombatParams>();
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
@@ -87,13 +87,11 @@ void UMCNpcAnimStateProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 				Anim.PlayRate = 1.f;
 			}
 
-			// TODO(debug): temporary - verify walk triggers while moving. Remove after checking.
-			if (World)
-			{
-				DrawDebugString(World, Transforms[i].GetTransform().GetLocation() + FVector(0.f, 0.f, 120.f),
-					FString::Printf(TEXT("v=%.0f idx=%d"), Velocities[i].Value.Size(), Anim.StateIndex),
-					nullptr, FColor::White, 0.f);
-			}
+#if ENABLE_VISUAL_LOG
+			UE_VLOG_LOCATION(this, LogTemp, Log,
+				Transforms[i].GetTransform().GetLocation() + FVector(0.f, 0.f, 120.f), 20.f, FColor::White,
+				TEXT("v=%.0f idx=%d"), Velocities[i].Value.Size(), Anim.StateIndex);
+#endif
 
 			const bool bStateChanged = Anim.StateIndex != PrevState;
 			if (bStateChanged)

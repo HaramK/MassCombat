@@ -8,7 +8,7 @@
 #include "MassLODFragments.h"
 #include "AnimToTextureDataAsset.h"
 #include "AnimToTextureInstancePlaybackHelpers.h"
-#include "DrawDebugHelpers.h" // TODO(debug): 임시 — 확인 후 제거
+#include "VisualLogger/VisualLogger.h"
 
 UMCNpcUpdateISMAnimProcessor::UMCNpcUpdateISMAnimProcessor()
 {
@@ -19,30 +19,31 @@ UMCNpcUpdateISMAnimProcessor::UMCNpcUpdateISMAnimProcessor()
 void UMCNpcUpdateISMAnimProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
 	Super::ConfigureQueries(EntityManager);
-	EntityQuery.AddRequirement<FMCNpcAnimStateFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddRequirement<FMCNpcAnimStateFragment>(EMassFragmentAccess::ReadWrite);
 }
 
 void UMCNpcUpdateISMAnimProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
 	UWorld* World = EntityManager.GetWorld();
 
-	EntityQuery.ForEachEntityChunk(Context, [World](FMassExecutionContext& Context)
+	EntityQuery.ForEachEntityChunk(Context, [this, World](FMassExecutionContext& Context)
 	{
 		UMassRepresentationSubsystem* RepresentationSubsystem = Context.GetSharedFragment<FMassRepresentationSubsystemSharedFragment>().RepresentationSubsystem;
 		check(RepresentationSubsystem);
 		FMassInstancedStaticMeshInfoArrayView ISMInfo = RepresentationSubsystem->GetMutableInstancedStaticMeshInfos();
-	
+		const float DeltaTime = World ? World->GetDeltaSeconds() : 0.f;
+
 		const TConstArrayView<FTransformFragment> TransformList = Context.GetFragmentView<FTransformFragment>();
 		const TArrayView<FMassRepresentationFragment> RepresentationList = Context.GetMutableFragmentView<FMassRepresentationFragment>();
 		const TConstArrayView<FMassRepresentationLODFragment> RepresentationLODList = Context.GetFragmentView<FMassRepresentationLODFragment>();
-		const TConstArrayView<FMCNpcAnimStateFragment> AnimList = Context.GetFragmentView<FMCNpcAnimStateFragment>();
+		const TArrayView<FMCNpcAnimStateFragment> AnimList = Context.GetMutableFragmentView<FMCNpcAnimStateFragment>();
 	
 		for (FMassExecutionContext::FEntityIterator EntityIt = Context.CreateEntityIterator(); EntityIt; ++EntityIt)
 		{
 			const FTransformFragment& TransformFragment = TransformList[EntityIt];
 			const FMassRepresentationLODFragment& RepresentationLOD = RepresentationLODList[EntityIt];
 			FMassRepresentationFragment& Representation = RepresentationList[EntityIt];
-			const FMCNpcAnimStateFragment& AnimationDataList = AnimList[EntityIt];
+			FMCNpcAnimStateFragment& AnimationDataList = AnimList[EntityIt];
 	
 			if (Representation.CurrentRepresentation == EMassRepresentationType::StaticMeshInstance)
 			{
@@ -53,24 +54,42 @@ void UMCNpcUpdateISMAnimProcessor::Execute(FMassEntityManager& EntityManager, FM
 						, TransformFragment.GetTransform(), Representation.PrevTransform
 						, RepresentationLOD.LODSignificance, Representation.PrevLODSignificance);
 	
-					FAnimToTextureAutoPlayData AutoPlay;
+					FAnimToTextureAutoPlayData Range;
 					const bool bGotData = UAnimToTextureInstancePlaybackLibrary::GetAutoPlayDataFromDataAsset(
-							AnimationDataList.AnimData.Get(), AnimationDataList.StateIndex, AutoPlay, 0.f, AnimationDataList.PlayRate);
+							AnimationDataList.AnimData.Get(), AnimationDataList.StateIndex, Range, 0.f, AnimationDataList.PlayRate);
+
+					FAnimToTextureFrameData FrameData;
+					if (bGotData)
 					{
-	
-						ISMInfo[ISMInfoIndex].AddBatchedCustomData<FAnimToTextureAutoPlayData>(
-							AutoPlay, RepresentationLOD.LODSignificance, Representation.PrevLODSignificance);
+						const float SampleRate = AnimationDataList.AnimData.IsValid() ? AnimationDataList.AnimData->SampleRate : 30.f;
+						const float NumFrames  = Range.EndFrame - Range.StartFrame + 1.f;
+						float& CurrentFrame    = AnimationDataList.CurrentFrame;
+
+						if (CurrentFrame < Range.StartFrame || CurrentFrame > Range.EndFrame)
+						{
+							CurrentFrame = Range.StartFrame;
+						}
+						else if (NumFrames > 0.f)
+						{
+							CurrentFrame = Range.StartFrame + FMath::Fmod(CurrentFrame - Range.StartFrame + DeltaTime * AnimationDataList.PlayRate * SampleRate, NumFrames);
+						}
+
+						FrameData.Frame     = CurrentFrame;
+						FrameData.PrevFrame = FMath::Clamp(CurrentFrame - 1.f, Range.StartFrame, Range.EndFrame);
 					}
 
-					// TODO(debug): 임시 — 엔티티별로 push되는 custom data 값 화면 표시. 확인 후 제거.
-					if (World)
 					{
-						DrawDebugString(World, TransformFragment.GetTransform().GetLocation() + FVector(0.f, 0.f, 150.f),
-							bGotData
-								? FString::Printf(TEXT("idx=%d SF=%.0f EF=%.0f TO=%.2f PR=%.2f"), AnimationDataList.StateIndex, AutoPlay.StartFrame, AutoPlay.EndFrame, AutoPlay.TimeOffset, AutoPlay.PlayRate)
-								: FString::Printf(TEXT("idx=%d NO DATA (AnimData/StateIndex invalid)"), AnimationDataList.StateIndex),
-							nullptr, FColor::Yellow, 0.f);
+	
+						ISMInfo[ISMInfoIndex].AddBatchedCustomData<FAnimToTextureFrameData>(
+							FrameData, RepresentationLOD.LODSignificance, Representation.PrevLODSignificance);
 					}
+
+#if ENABLE_VISUAL_LOG
+					UE_VLOG_LOCATION(this, LogTemp, Log,
+						TransformFragment.GetTransform().GetLocation() + FVector(0.f, 0.f, 150.f), 20.f, FColor::Yellow,
+						TEXT("idx=%d Frame=%.1f SF=%.0f EF=%.0f PR=%.2f bGotData=%d"),
+						AnimationDataList.StateIndex, FrameData.Frame, Range.StartFrame, Range.EndFrame, AnimationDataList.PlayRate, bGotData ? 1 : 0);
+#endif
 				}
 			}
 			Representation.PrevTransform = TransformFragment.GetTransform();
