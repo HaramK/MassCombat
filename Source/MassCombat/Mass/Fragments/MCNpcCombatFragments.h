@@ -18,7 +18,11 @@ struct FMCNpcCombatFragment : public FMassFragment
 
 	float AttackCooldownRemaining = 0.f;
 
+	float FaceTargetEndTime = 0.f;
+
 	uint8 bHasTarget : 1 = 0;
+
+	uint8 bMovementBlocked : 1 = 0;
 };
 
 USTRUCT()
@@ -75,7 +79,6 @@ struct FMCNpcCombatParams : public FMassConstSharedFragment
 	UPROPERTY(EditAnywhere, Category = "Anim")
 	int32 AttackStateIndex = 2;
 
-	// hard ref: 로드된 VAT 데이터에셋을 GC로부터 보존(프래그먼트 AnimData는 weak라 단독으론 수거됨)
 	UPROPERTY(EditAnywhere, Category = "Anim")
 	TObjectPtr<UAnimToTextureDataAsset> DefaultAnimData;
 
