@@ -51,9 +51,9 @@ void UMCNpcAnimStateProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 			FMCNpcAnimStateFragment& Anim = Anims[i];
 			const FMassRepresentationFragment& Rep = Reps[i];
 
-			if (!Anim.AnimData.IsValid() && !Params.DefaultAnimData.IsNull())
+			if (!Anim.AnimData.IsValid() && Params.DefaultAnimData)
 			{
-				Anim.AnimData = Params.DefaultAnimData.LoadSynchronous();
+				Anim.AnimData = Params.DefaultAnimData.Get();
 			}
 
 			const bool bWasActor = Rep.PrevRepresentation == EMassRepresentationType::HighResSpawnedActor
