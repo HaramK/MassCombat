@@ -38,7 +38,8 @@ EStateTreeRunStatus FMCNpcAttackTask::EnterState(FStateTreeExecutionContext& Con
 	Data.Duration = Params.AttackMontage ? Params.AttackMontage->GetPlayLength() : Params.AttackDurationFallback;
 
 	FMCNpcAnimStateFragment& Anim = Context.GetExternalData(AnimHandle);
-	Anim.bAttacking = true;
+	Anim.ActiveMontage = Params.AttackMontage;
+	Anim.ActiveMontageStateIndex = Params.AttackStateIndex;
 
 	ScheduleNextTick(Context, Data.Duration);
 
@@ -63,7 +64,8 @@ EStateTreeRunStatus FMCNpcAttackTask::Tick(FStateTreeExecutionContext& Context, 
 void FMCNpcAttackTask::ExitState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
 {
 	FMCNpcAnimStateFragment& Anim = Context.GetExternalData(AnimHandle);
-	Anim.bAttacking = false;
+	Anim.ActiveMontage = nullptr;
+	Anim.ActiveMontageStateIndex = INDEX_NONE;
 
 	FMCNpcCombatFragment& Combat = Context.GetExternalData(CombatHandle);
 	Combat.AttackCooldownRemaining = AttackCooldown;

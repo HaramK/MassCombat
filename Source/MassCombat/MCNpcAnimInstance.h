@@ -15,6 +15,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void PlayAttackMontage(UAnimMontage* Montage);
 
+	void PlayMontageSynced(UAnimMontage* Montage, float StartPosition, bool bInstantBlend);
+
 	UPROPERTY(BlueprintReadOnly, Category = "Locomotion")
 	FVector Velocity = FVector::ZeroVector;
 
@@ -29,4 +31,13 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category = "Locomotion")
 	bool bOrientRotationToMovement = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Locomotion")
+	bool bSwappedThisFrame = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Locomotion")
+	float LocomotionStartPosition = 0.f;
+
+private:
+	bool IsMontageAlreadyPlaying(const UAnimMontage* Montage) const;
 };
