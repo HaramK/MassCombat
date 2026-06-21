@@ -66,6 +66,12 @@ protected:
 	bool UpdateShortPath(FStateTreeExecutionContext& Context) const;
 	void ScheduleNextTick(FStateTreeExecutionContext& Context, float Delay) const;
 
+	virtual bool HasGoal(const FMCNpcCombatFragment& Combat) const;
+	virtual FVector GetGoalLocation(const FMCNpcCombatFragment& Combat) const;
+	virtual float GetGoalDistance(const FMCNpcCombatFragment& Combat) const;
+	virtual bool IsGoalReached(const FMCNpcCombatFragment& Combat, float AcceptanceRadius) const;
+	virtual FColor GetDebugColor() const;
+
 	TStateTreeExternalDataHandle<FMCNpcCombatFragment> CombatHandle;
 	TStateTreeExternalDataHandle<FTransformFragment> TransformHandle;
 	TStateTreeExternalDataHandle<FMassMoveTargetFragment> MoveTargetHandle;

@@ -22,4 +22,13 @@ struct FMCUnitInfoFragment : public FMassConstSharedFragment
 
 	UPROPERTY(EditAnywhere, Category = "Unit")
 	float MaxHealth = 100.f;
+
+	UPROPERTY(EditAnywhere, Category = "Unit")
+	int32 MaxAttackerCounts = 3;
+
+	UPROPERTY(EditAnywhere, Category = "Unit")
+	float AttackerSlotRadius = 150.f;
+
+	UPROPERTY(EditAnywhere, Category = "Unit")
+	bool bRecalcSlotsOnAttackerLoss = false;
 };

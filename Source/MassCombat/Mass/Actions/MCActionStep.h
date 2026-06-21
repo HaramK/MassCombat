@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MassEntityTypes.h"
 #include "MCActionStep.generated.h"
 
 class UWorld;
@@ -15,6 +16,7 @@ struct FMCActionStepContext
 	FMassEntityManager* EntityManager = nullptr;
 	FMCNpcAnimStateFragment* Anim = nullptr;
 	FMCNpcCombatFragment* Combat = nullptr;
+	FMassEntityHandle SelfEntity;
 	float Now = 0.f;
 };
 

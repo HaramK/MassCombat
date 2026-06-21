@@ -75,6 +75,24 @@ void UMCActionLocomotionProcessor::Execute(FMassEntityManager& EntityManager, FM
 					}
 				}
 			}
+			else if (Combat.bLookAtNearestEnemy && Combat.bHasNearestEnemy)
+			{
+				FTransform& Xf = Transforms[i].GetMutableTransform();
+
+				FVector ToEnemy = Combat.NearestEnemyLocation - Xf.GetLocation();
+				ToEnemy.Z = 0.f;
+				if (!ToEnemy.IsNearlyZero())
+				{
+					const FRotator NewRot = FMath::RInterpConstantTo(Xf.Rotator(), ToEnemy.Rotation(), DeltaTime, Combat.LookAtTurnRate);
+					const FQuat NewQ = NewRot.Quaternion();
+					Xf.SetRotation(NewQ);
+
+					if (bHasMoveTarget)
+					{
+						MoveTargets[i].Forward = NewQ.GetForwardVector();
+					}
+				}
+			}
 		}
 	});
 }

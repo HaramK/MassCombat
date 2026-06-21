@@ -11,6 +11,12 @@
 #include "NavCorridor.h"
 #include "NavigationSystem.h"
 #include "NavigationData.h"
+#include "DrawDebugHelpers.h"
+
+static TAutoConsoleVariable<bool> CVarDrawMoveGoal(
+	TEXT("mc.DrawMoveGoal"),
+	false,
+	TEXT("Draw MoveToTarget / MoveToTargetSlot goal per agent (blue = target, cyan = slot)."));
 
 bool FMCNpcMoveToTargetTask::Link(FStateTreeLinker& Linker)
 {
@@ -24,6 +30,31 @@ bool FMCNpcMoveToTargetTask::Link(FStateTreeLinker& Linker)
 	Linker.LinkExternalData(ShortPathHandle);
 	Linker.LinkExternalData(MassSignalSubsystemHandle);
 	return true;
+}
+
+bool FMCNpcMoveToTargetTask::HasGoal(const FMCNpcCombatFragment& Combat) const
+{
+	return Combat.bHasTarget;
+}
+
+FVector FMCNpcMoveToTargetTask::GetGoalLocation(const FMCNpcCombatFragment& Combat) const
+{
+	return Combat.TargetLocation;
+}
+
+float FMCNpcMoveToTargetTask::GetGoalDistance(const FMCNpcCombatFragment& Combat) const
+{
+	return Combat.DistanceToTarget;
+}
+
+bool FMCNpcMoveToTargetTask::IsGoalReached(const FMCNpcCombatFragment& Combat, float AcceptanceRadius) const
+{
+	return GetGoalDistance(Combat) <= AcceptanceRadius;
+}
+
+FColor FMCNpcMoveToTargetTask::GetDebugColor() const
+{
+	return FColor::Blue;
 }
 
 void FMCNpcMoveToTargetTask::GetDependencies(UE::MassBehavior::FStateTreeDependencyBuilder& Builder) const
@@ -58,7 +89,7 @@ bool FMCNpcMoveToTargetTask::RequestPath(FStateTreeExecutionContext& Context) co
 		return false;
 	}
 
-	FPathFindingQuery Query(nullptr, *NavData, AgentLocation, Combat.TargetLocation);
+	FPathFindingQuery Query(nullptr, *NavData, AgentLocation, GetGoalLocation(Combat));
 	if (!Query.NavData.IsValid())
 	{
 		Query.NavData = NavSys->GetNavDataForProps(NavAgentProps, Query.StartLocation);
@@ -138,9 +169,9 @@ EStateTreeRunStatus FMCNpcMoveToTargetTask::EnterState(FStateTreeExecutionContex
 	const FMCNpcCombatFragment& Combat = Context.GetExternalData(CombatHandle);
 
 	Data.LastRepathTargetLocation = FVector(TNumericLimits<float>::Max());
-	if (Combat.bHasTarget && RequestPath(Context))
+	if (HasGoal(Combat) && RequestPath(Context))
 	{
-		Data.LastRepathTargetLocation = Combat.TargetLocation;
+		Data.LastRepathTargetLocation = GetGoalLocation(Combat);
 	}
 
 	ScheduleNextTick(Context, Data.RepathInterval);
@@ -154,14 +185,28 @@ EStateTreeRunStatus FMCNpcMoveToTargetTask::Tick(FStateTreeExecutionContext& Con
 	const FMCNpcCombatFragment& Combat = Context.GetExternalData(CombatHandle);
 	const FMassNavMeshShortPathFragment& ShortPath = Context.GetExternalData(ShortPathHandle);
 
-	if (Combat.bHasTarget)
+	if (HasGoal(Combat))
 	{
-		const bool bTargetMoved = FVector::DistSquared(Combat.TargetLocation, Data.LastRepathTargetLocation) > FMath::Square(Data.RepathDistanceThreshold);
+		const FVector GoalLocation = GetGoalLocation(Combat);
+
+		if (CVarDrawMoveGoal.GetValueOnGameThread())
+		{
+			if (UWorld* World = Context.GetWorld())
+			{
+				const FVector AgentLocation = Context.GetExternalData(TransformHandle).GetTransform().GetLocation();
+				const FVector GoalDraw(GoalLocation.X, GoalLocation.Y, AgentLocation.Z);
+				const FColor Color = GetDebugColor();
+				DrawDebugLine(World, AgentLocation, GoalDraw, Color, false, Data.RepathInterval * 1.5f, 0, 2.f);
+				DrawDebugSphere(World, GoalDraw, 15.f, 8, Color, false, Data.RepathInterval * 1.5f, 0, 1.f);
+			}
+		}
+
+		const bool bTargetMoved = FVector::DistSquared(GoalLocation, Data.LastRepathTargetLocation) > FMath::Square(Data.RepathDistanceThreshold);
 		if (bTargetMoved)
 		{
 			if (RequestPath(Context))
 			{
-				Data.LastRepathTargetLocation = Combat.TargetLocation;
+				Data.LastRepathTargetLocation = GoalLocation;
 			}
 		}
 		else if (ShortPath.IsDone() && ShortPath.bPartialResult)
@@ -169,7 +214,7 @@ EStateTreeRunStatus FMCNpcMoveToTargetTask::Tick(FStateTreeExecutionContext& Con
 			UpdateShortPath(Context);
 		}
 
-		if (Combat.DistanceToTarget <= Data.AcceptanceRadius)
+		if (IsGoalReached(Combat, Data.AcceptanceRadius))
 		{
 			return EStateTreeRunStatus::Succeeded;
 		}

@@ -59,6 +59,8 @@ void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
 		return;
 	}
 
+	Ctx.Combat->LastAttackTime = Ctx.Now;
+
 	const FMassEntityHandle Target = Ctx.Combat->CurrentTarget;
 	if (!Ctx.EntityManager->IsEntityValid(Target))
 	{
@@ -68,5 +70,11 @@ void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
 	if (FMCUnitFragment* TargetUnit = Ctx.EntityManager->GetFragmentDataPtr<FMCUnitFragment>(Target))
 	{
 		TargetUnit->Health -= Damage;
+	}
+
+	if (FMCNpcCombatFragment* TargetCombat = Ctx.EntityManager->GetFragmentDataPtr<FMCNpcCombatFragment>(Target))
+	{
+		TargetCombat->LastAttackerUnit = Ctx.SelfEntity;
+		TargetCombat->LastDamagedTime = Ctx.Now;
 	}
 }

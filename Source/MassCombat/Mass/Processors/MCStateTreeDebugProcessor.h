@@ -2,15 +2,15 @@
 
 #include "CoreMinimal.h"
 #include "MassProcessor.h"
-#include "MCActionLocomotionProcessor.generated.h"
+#include "MCStateTreeDebugProcessor.generated.h"
 
 UCLASS()
-class MASSCOMBAT_API UMCActionLocomotionProcessor : public UMassProcessor
+class MASSCOMBAT_API UMCStateTreeDebugProcessor : public UMassProcessor
 {
 	GENERATED_BODY()
 
 public:
-	UMCActionLocomotionProcessor();
+	UMCStateTreeDebugProcessor();
 
 protected:
 	virtual void ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager) override;

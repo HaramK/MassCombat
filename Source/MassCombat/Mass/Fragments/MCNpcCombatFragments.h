@@ -14,7 +14,37 @@ struct FMCNpcCombatFragment : public FMassFragment
 
 	FVector TargetLocation = FVector::ZeroVector;
 
+	FVector SlotLocation = FVector::ZeroVector;
+
 	float DistanceToTarget = TNumericLimits<float>::Max();
+
+	float DistanceToSlot = TNumericLimits<float>::Max();
+
+	FVector NearestEnemyLocation = FVector::ZeroVector;
+
+	FVector LoiterLocation = FVector::ZeroVector;
+
+	FVector LoiterOffset = FVector::ZeroVector;
+
+	float DistanceToNearestEnemy = TNumericLimits<float>::Max();
+
+	float DistanceToLoiter = TNumericLimits<float>::Max();
+
+	float LoiterMinRadius = 0.f;
+
+	float LoiterMaxRadius = 0.f;
+
+	float LookAtTurnRate = 0.f;
+
+	int32 SlotIndex = INDEX_NONE;
+
+	FMassEntityHandle LastAttackerUnit;
+
+	float LastDamagedTime = -1.e6f;
+
+	float LastAttackTime = -1.e6f;
+
+	float NextRetargetTime = 0.f;
 
 	float AttackCooldownRemaining = 0.f;
 
@@ -23,6 +53,12 @@ struct FMCNpcCombatFragment : public FMassFragment
 	FMassEntityHandle CurrentTarget;
 
 	uint8 bHasTarget : 1 = 0;
+
+	uint8 bHasNearestEnemy : 1 = 0;
+
+	uint8 bHasLoiterOffset : 1 = 0;
+
+	uint8 bLookAtNearestEnemy : 1 = 0;
 
 	uint8 bMovementBlocked : 1 = 0;
 };

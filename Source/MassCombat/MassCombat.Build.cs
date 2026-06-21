@@ -13,7 +13,7 @@ public class MassCombat : ModuleRules
 
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "MassEntity",
 			"MassCommon", "MassSpawner", "MassActors", "MassMovement", "MassNavigation", "MassNavMeshNavigation", "MassLOD", "MassRepresentation", "MassSignals",
-			"StateTreeModule", "MassAIBehavior", "NavigationSystem", "NavCorridor", "AnimToTexture", "GameplayTags"});
+			"StateTreeModule", "MassAIBehavior", "NavigationSystem", "NavCorridor", "AnimToTexture", "GameplayTags", "DeveloperSettings"});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

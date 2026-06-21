@@ -13,11 +13,12 @@
 
 namespace
 {
-	FMCActionStepContext MakeStepContext(UWorld* World, FMCNpcAnimStateFragment* Anim, FMCNpcCombatFragment* Combat, float Now)
+	FMCActionStepContext MakeStepContext(UWorld* World, FMassEntityHandle SelfEntity, FMCNpcAnimStateFragment* Anim, FMCNpcCombatFragment* Combat, float Now)
 	{
 		FMCActionStepContext Ctx;
 		Ctx.World = World;
 		Ctx.EntityManager = World ? &UE::Mass::Utils::GetEntityManagerChecked(*World) : nullptr;
+		Ctx.SelfEntity = SelfEntity;
 		Ctx.Anim = Anim;
 		Ctx.Combat = Combat;
 		Ctx.Now = Now;
@@ -135,6 +136,7 @@ EStateTreeRunStatus FMCPerformActionTask::EnterState(FStateTreeExecutionContext&
 
 	UWorld* World = SignalSubsystem.GetWorld();
 	const float Now = World ? World->GetTimeSeconds() : 0.f;
+	const FMassEntityHandle SelfEntity = static_cast<FMassStateTreeExecutionContext&>(Context).GetEntity();
 
 	if (!FMCActionLib::TryStart(ActionFrag, Set, ActionTag, Now))
 	{
@@ -154,7 +156,7 @@ EStateTreeRunStatus FMCPerformActionTask::EnterState(FStateTreeExecutionContext&
 		Combat.bMovementBlocked = true;
 	}
 
-	const FMCActionStepContext Ctx = MakeStepContext(World, &Anim, &Combat, Now);
+	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, &Anim, &Combat, Now);
 
 	Data.Cursors.SetNum(Def->Tracks.Num());
 	for (int32 t = 0; t < Def->Tracks.Num(); ++t)
@@ -183,6 +185,7 @@ EStateTreeRunStatus FMCPerformActionTask::Tick(FStateTreeExecutionContext& Conte
 
 	UWorld* World = SignalSubsystem.GetWorld();
 	const float Now = World ? World->GetTimeSeconds() : 0.f;
+	const FMassEntityHandle SelfEntity = static_cast<FMassStateTreeExecutionContext&>(Context).GetEntity();
 
 	const UMCActionDef* Def = Set.Actions.IsValidIndex(Data.ActionIndex) ? Set.Actions[Data.ActionIndex] : nullptr;
 	if (!Def)
@@ -190,7 +193,7 @@ EStateTreeRunStatus FMCPerformActionTask::Tick(FStateTreeExecutionContext& Conte
 		return EStateTreeRunStatus::Failed;
 	}
 
-	const FMCActionStepContext Ctx = MakeStepContext(World, &Anim, &Combat, Now);
+	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, &Anim, &Combat, Now);
 
 	const int32 Count = FMath::Min(Data.Cursors.Num(), Def->Tracks.Num());
 	for (int32 t = 0; t < Count; ++t)
@@ -219,6 +222,7 @@ void FMCPerformActionTask::ExitState(FStateTreeExecutionContext& Context, const 
 
 	UWorld* World = SignalSubsystem.GetWorld();
 	const float Now = World ? World->GetTimeSeconds() : 0.f;
+	const FMassEntityHandle SelfEntity = static_cast<FMassStateTreeExecutionContext&>(Context).GetEntity();
 
 	const UMCActionDef* Def = Set.Actions.IsValidIndex(Data.ActionIndex) ? Set.Actions[Data.ActionIndex] : nullptr;
 
@@ -234,7 +238,7 @@ void FMCPerformActionTask::ExitState(FStateTreeExecutionContext& Context, const 
 
 	if (Def)
 	{
-		const FMCActionStepContext Ctx = MakeStepContext(World, &Anim, &Combat, Now);
+		const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, &Anim, &Combat, Now);
 		const int32 Count = FMath::Min(Data.Cursors.Num(), Def->Tracks.Num());
 		for (int32 t = 0; t < Count; ++t)
 		{
