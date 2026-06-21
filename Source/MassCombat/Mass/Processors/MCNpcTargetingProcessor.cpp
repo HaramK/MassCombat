@@ -31,6 +31,7 @@ void UMCNpcTargetingProcessor::ConfigureQueries(const TSharedRef<FMassEntityMana
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddRequirement<FMCNpcCombatFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddConstSharedRequirement<FMCUnitInfoFragment>();
+	EntityQuery.AddConstSharedRequirement<FMCNpcCombatParams>();
 }
 
 namespace
@@ -43,6 +44,7 @@ namespace
 		int32 MaxAttackers;
 		float SlotRadius;
 		bool bRecalc;
+		bool bIsPlayer;
 	};
 
 	struct FMCAttacker
@@ -53,6 +55,9 @@ namespace
 		int32 EntityIndex;
 		int32 TargetIdx;
 		FMassEntityHandle Handle;
+		FMassEntityHandle PrevTarget;
+		bool bPreferPlayer;
+		float PlayerRadiusSq;
 	};
 
 	FVector ComputeSlotLocation(const FMCTargetCandidate& Cand, int32 SlotIndex)
@@ -82,13 +87,14 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 		const FMCUnitInfoFragment& Info = Ctx.GetConstSharedFragment<FMCUnitInfoFragment>();
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
 		const TConstArrayView<FMCUnitFragment> Units = Ctx.GetFragmentView<FMCUnitFragment>();
+		const bool bIsPlayer = Ctx.DoesArchetypeHaveTag<FMCPlayerTag>();
 
 		const int32 Num = Ctx.GetNumEntities();
 		for (int32 i = 0; i < Num; ++i)
 		{
 			if (Units[i].Health > 0.f)
 			{
-				Candidates.Add({ Ctx.GetEntity(i), Transforms[i].GetTransform().GetLocation(), Info.Faction, Info.MaxAttackerCounts, Info.AttackerSlotRadius, Info.bRecalcSlotsOnAttackerLoss });
+				Candidates.Add({ Ctx.GetEntity(i), Transforms[i].GetTransform().GetLocation(), Info.Faction, Info.MaxAttackerCounts, Info.AttackerSlotRadius, Info.bRecalcSlotsOnAttackerLoss, bIsPlayer });
 			}
 		}
 	});
@@ -105,29 +111,105 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 	EntityQuery.ForEachEntityChunk(Context, [&Attackers](FMassExecutionContext& Ctx)
 	{
 		const uint8 Faction = Ctx.GetConstSharedFragment<FMCUnitInfoFragment>().Faction;
+		const FMCNpcCombatParams& Params = Ctx.GetConstSharedFragment<FMCNpcCombatParams>();
+		const float PlayerRadiusSq = Params.PlayerTargetRadius * Params.PlayerTargetRadius;
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
 		const TArrayView<FMCNpcCombatFragment> Combats = Ctx.GetMutableFragmentView<FMCNpcCombatFragment>();
 
 		const int32 Num = Ctx.GetNumEntities();
 		for (int32 i = 0; i < Num; ++i)
 		{
-			Attackers.Add({ &Combats[i], Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Ctx.GetEntity(i) });
+			Attackers.Add({ &Combats[i], Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Ctx.GetEntity(i), Combats[i].CurrentTarget, Params.bPreferPlayerTarget, PlayerRadiusSq });
 		}
 	});
 
 	TArray<int32> AssignedCount;
 	AssignedCount.Init(0, Candidates.Num());
 
+	int32 PlayerCandIdx = INDEX_NONE;
+	for (int32 c = 0; c < Candidates.Num(); ++c)
+	{
+		if (Candidates[c].bIsPlayer)
+		{
+			PlayerCandIdx = c;
+			break;
+		}
+	}
+
+	TArray<bool> CandTargetsPlayer;
+	CandTargetsPlayer.Init(false, Candidates.Num());
+	if (PlayerCandIdx != INDEX_NONE)
+	{
+		const FMassEntityHandle PlayerHandle = Candidates[PlayerCandIdx].Handle;
+		for (const FMCAttacker& A : Attackers)
+		{
+			if (A.PrevTarget == PlayerHandle)
+			{
+				if (const int32* Ci = HandleToCand.Find(A.Handle))
+				{
+					CandTargetsPlayer[*Ci] = true;
+				}
+			}
+		}
+	}
+
+	if (PlayerCandIdx != INDEX_NONE)
+	{
+		const FMCTargetCandidate& PlayerCand = Candidates[PlayerCandIdx];
+		const FMassEntityHandle PlayerHandle = PlayerCand.Handle;
+
+		TArray<int32> Contenders;
+		for (int32 a = 0; a < Attackers.Num(); ++a)
+		{
+			const FMCAttacker& At = Attackers[a];
+			if (At.bPreferPlayer
+				&& PlayerCand.Faction != At.Faction
+				&& FVector::DistSquared(At.Location, PlayerCand.Location) <= At.PlayerRadiusSq)
+			{
+				Contenders.Add(a);
+			}
+		}
+
+		Contenders.Sort([&Attackers, PlayerHandle, &PlayerCand](int32 X, int32 Y)
+		{
+			const bool bXInc = Attackers[X].PrevTarget == PlayerHandle;
+			const bool bYInc = Attackers[Y].PrevTarget == PlayerHandle;
+			if (bXInc != bYInc)
+			{
+				return bXInc;
+			}
+			return FVector::DistSquared(Attackers[X].Location, PlayerCand.Location) < FVector::DistSquared(Attackers[Y].Location, PlayerCand.Location);
+		});
+
+		const int32 Cap = FMath::Min(Contenders.Num(), FMath::Max(0, PlayerCand.MaxAttackers));
+		for (int32 k = 0; k < Cap; ++k)
+		{
+			FMCAttacker& At = Attackers[Contenders[k]];
+			if (At.Combat->CurrentTarget != PlayerHandle)
+			{
+				At.Combat->SlotIndex = INDEX_NONE;
+			}
+			At.TargetIdx = PlayerCandIdx;
+			++AssignedCount[PlayerCandIdx];
+		}
+	}
+
 	for (FMCAttacker& At : Attackers)
 	{
+		if (At.TargetIdx != INDEX_NONE)
+		{
+			continue;
+		}
+
 		FMCNpcCombatFragment* Combat = At.Combat;
 		const FMassEntityHandle OldTarget = Combat->CurrentTarget;
 		const int32* OldFound = OldTarget.IsSet() ? HandleToCand.Find(OldTarget) : nullptr;
-		const bool bOldValid = OldFound && (Candidates[*OldFound].Faction != At.Faction);
+		const bool bOldValid = OldFound && (Candidates[*OldFound].Faction != At.Faction) && !CandTargetsPlayer[*OldFound];
 
 		const FMassEntityHandle Attacker = Combat->LastAttackerUnit;
 		const int32* AtkFound = (Attacker.IsSet() && Attacker != OldTarget) ? HandleToCand.Find(Attacker) : nullptr;
 		const bool bRetaliate = AtkFound && (Candidates[*AtkFound].Faction != At.Faction)
+			&& !CandTargetsPlayer[*AtkFound]
 			&& ((Now - Combat->LastDamagedTime) < CombatWindow)
 			&& (AssignedCount[*AtkFound] < Candidates[*AtkFound].MaxAttackers);
 
@@ -176,6 +258,11 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 		for (int32 c = 0; c < Candidates.Num(); ++c)
 		{
 			if (Candidates[c].Faction == At.Faction)
+			{
+				continue;
+			}
+
+			if (CandTargetsPlayer[c])
 			{
 				continue;
 			}
@@ -307,20 +394,43 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 			const int32 SlotIndex = FMath::Max(0, Combat->SlotIndex);
 			FVector SlotLocation = ComputeSlotLocation(Cand, SlotIndex);
 
+			bool bReverse = false;
 			if (const int32* OppPtr = AttackerByHandle.Find(Cand.Handle))
 			{
 				const FMCAttacker& Opp = Attackers[*OppPtr];
 				if (Opp.TargetIdx != INDEX_NONE && Candidates[Opp.TargetIdx].Handle == At.Handle)
 				{
-					const FVector Delta = At.Location - Cand.Location;
-					if (!Delta.IsNearlyZero())
+					const bool bMeWasTargeting = At.PrevTarget == Cand.Handle;
+					const bool bOppWasTargeting = Opp.PrevTarget == At.Handle;
+
+					if (bOppWasTargeting && !bMeWasTargeting)
 					{
-						const FVector U = Delta.GetSafeNormal();
-						const FVector Mid = (At.Location + Cand.Location) * 0.5f;
-						SlotLocation = Mid + U * (Cand.SlotRadius * 0.5f);
+						bReverse = true;
+					}
+					else if (bMeWasTargeting && !bOppWasTargeting)
+					{
+						bReverse = false;
+					}
+					else if (bMeWasTargeting && bOppWasTargeting)
+					{
+						bReverse = Combat->bReverseSlot != 0;
+					}
+					else
+					{
+						bReverse = At.EntityIndex > Opp.EntityIndex;
+					}
+
+					if (bReverse)
+					{
+						if (const int32* MeCandPtr = HandleToCand.Find(At.Handle))
+						{
+							const FVector AnchorOffset = ComputeSlotLocation(Candidates[*MeCandPtr], FMath::Max(0, Opp.Combat->SlotIndex)) - At.Location;
+							SlotLocation = Cand.Location - AnchorOffset;
+						}
 					}
 				}
 			}
+			Combat->bReverseSlot = bReverse;
 
 			Combat->bHasTarget = true;
 			Combat->CurrentTarget = Cand.Handle;
@@ -350,6 +460,7 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 			Combat->bHasTarget = false;
 			Combat->CurrentTarget = FMassEntityHandle();
 			Combat->SlotIndex = INDEX_NONE;
+			Combat->bReverseSlot = 0;
 			Combat->TargetLocation = FVector::ZeroVector;
 			Combat->SlotLocation = FVector::ZeroVector;
 			Combat->DistanceToTarget = TNumericLimits<float>::Max();

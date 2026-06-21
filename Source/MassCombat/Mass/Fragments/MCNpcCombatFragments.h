@@ -61,6 +61,8 @@ struct FMCNpcCombatFragment : public FMassFragment
 	uint8 bLookAtNearestEnemy : 1 = 0;
 
 	uint8 bMovementBlocked : 1 = 0;
+
+	uint8 bReverseSlot : 1 = 0;
 };
 
 USTRUCT()
@@ -95,6 +97,12 @@ struct FMCNpcCombatParams : public FMassConstSharedFragment
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float AttackRange = 200.f;
+
+	UPROPERTY(EditAnywhere, Category = "Targeting")
+	bool bPreferPlayerTarget = false;
+
+	UPROPERTY(EditAnywhere, Category = "Targeting")
+	float PlayerTargetRadius = 1000.f;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float WalkSpeedThresholdSq = 100.f;

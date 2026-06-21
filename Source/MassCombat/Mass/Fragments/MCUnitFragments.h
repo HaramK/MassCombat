@@ -13,6 +13,12 @@ struct FMCUnitFragment : public FMassFragment
 };
 
 USTRUCT()
+struct FMCPlayerTag : public FMassTag
+{
+	GENERATED_BODY()
+};
+
+USTRUCT()
 struct FMCUnitInfoFragment : public FMassConstSharedFragment
 {
 	GENERATED_BODY()
