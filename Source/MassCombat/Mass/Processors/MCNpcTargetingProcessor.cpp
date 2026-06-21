@@ -36,30 +36,6 @@ void UMCNpcTargetingProcessor::ConfigureQueries(const TSharedRef<FMassEntityMana
 
 namespace
 {
-	struct FMCTargetCandidate
-	{
-		FMassEntityHandle Handle;
-		FVector Location;
-		uint8 Faction;
-		int32 MaxAttackers;
-		float SlotRadius;
-		bool bRecalc;
-		bool bIsPlayer;
-	};
-
-	struct FMCAttacker
-	{
-		FMCNpcCombatFragment* Combat;
-		FVector Location;
-		uint8 Faction;
-		int32 EntityIndex;
-		int32 TargetIdx;
-		FMassEntityHandle Handle;
-		FMassEntityHandle PrevTarget;
-		bool bPreferPlayer;
-		float PlayerRadiusSq;
-	};
-
 	FVector ComputeSlotLocation(const FMCTargetCandidate& Cand, int32 SlotIndex)
 	{
 		const int32 SlotCount = FMath::Max(1, Cand.MaxAttackers);
@@ -80,9 +56,9 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 	const float CombatWindow = Settings->CombatWindow;
 	const float RetargetInterval = Settings->RetargetInterval;
 
-	TArray<FMCTargetCandidate> Candidates;
+	Candidates.Reset();
 
-	GatherQuery.ForEachEntityChunk(Context, [&Candidates](FMassExecutionContext& Ctx)
+	GatherQuery.ForEachEntityChunk(Context, [this](FMassExecutionContext& Ctx)
 	{
 		const FMCUnitInfoFragment& Info = Ctx.GetConstSharedFragment<FMCUnitInfoFragment>();
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
@@ -99,16 +75,16 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 		}
 	});
 
-	TMap<FMassEntityHandle, int32> HandleToCand;
+	HandleToCand.Reset();
 	HandleToCand.Reserve(Candidates.Num());
 	for (int32 c = 0; c < Candidates.Num(); ++c)
 	{
 		HandleToCand.Add(Candidates[c].Handle, c);
 	}
 
-	TArray<FMCAttacker> Attackers;
+	Attackers.Reset();
 
-	EntityQuery.ForEachEntityChunk(Context, [&Attackers](FMassExecutionContext& Ctx)
+	EntityQuery.ForEachEntityChunk(Context, [this](FMassExecutionContext& Ctx)
 	{
 		const uint8 Faction = Ctx.GetConstSharedFragment<FMCUnitInfoFragment>().Faction;
 		const FMCNpcCombatParams& Params = Ctx.GetConstSharedFragment<FMCNpcCombatParams>();
@@ -123,8 +99,8 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 		}
 	});
 
-	TArray<int32> AssignedCount;
-	AssignedCount.Init(0, Candidates.Num());
+	AssignedCount.Reset();
+	AssignedCount.AddZeroed(Candidates.Num());
 
 	int32 PlayerCandIdx = INDEX_NONE;
 	for (int32 c = 0; c < Candidates.Num(); ++c)
@@ -136,8 +112,8 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 		}
 	}
 
-	TArray<bool> CandTargetsPlayer;
-	CandTargetsPlayer.Init(false, Candidates.Num());
+	CandTargetsPlayer.Reset();
+	CandTargetsPlayer.AddZeroed(Candidates.Num());
 	if (PlayerCandIdx != INDEX_NONE)
 	{
 		const FMassEntityHandle PlayerHandle = Candidates[PlayerCandIdx].Handle;
@@ -158,7 +134,7 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 		const FMCTargetCandidate& PlayerCand = Candidates[PlayerCandIdx];
 		const FMassEntityHandle PlayerHandle = PlayerCand.Handle;
 
-		TArray<int32> Contenders;
+		Contenders.Reset();
 		for (int32 a = 0; a < Attackers.Num(); ++a)
 		{
 			const FMCAttacker& At = Attackers[a];
@@ -170,7 +146,7 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 			}
 		}
 
-		Contenders.Sort([&Attackers, PlayerHandle, &PlayerCand](int32 X, int32 Y)
+		Contenders.Sort([this, PlayerHandle, &PlayerCand](int32 X, int32 Y)
 		{
 			const bool bXInc = Attackers[X].PrevTarget == PlayerHandle;
 			const bool bYInc = Attackers[Y].PrevTarget == PlayerHandle;
@@ -293,8 +269,14 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 		}
 	}
 
-	TArray<TArray<int32>> Groups;
-	Groups.SetNum(Candidates.Num());
+	if (Groups.Num() < Candidates.Num())
+	{
+		Groups.SetNum(Candidates.Num());
+	}
+	for (int32 c = 0; c < Candidates.Num(); ++c)
+	{
+		Groups[c].Reset();
+	}
 	for (int32 a = 0; a < Attackers.Num(); ++a)
 	{
 		if (Attackers[a].TargetIdx != INDEX_NONE)
@@ -316,7 +298,7 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 
 		if (Cand.bRecalc)
 		{
-			Group.Sort([&Attackers](int32 X, int32 Y)
+			Group.Sort([this](int32 X, int32 Y)
 			{
 				return Attackers[X].EntityIndex < Attackers[Y].EntityIndex;
 			});
@@ -378,7 +360,7 @@ void UMCNpcTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 		}
 	}
 
-	TMap<FMassEntityHandle, int32> AttackerByHandle;
+	AttackerByHandle.Reset();
 	AttackerByHandle.Reserve(Attackers.Num());
 	for (int32 a = 0; a < Attackers.Num(); ++a)
 	{

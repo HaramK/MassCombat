@@ -17,6 +17,7 @@ struct FMassDesiredMovementFragment;
 struct FMassMovementParameters;
 struct FMassNavMeshCachedPathFragment;
 struct FMassNavMeshShortPathFragment;
+struct FMassRepresentationLODFragment;
 class UMassSignalSubsystem;
 
 USTRUCT()
@@ -80,5 +81,6 @@ protected:
 	TStateTreeExternalDataHandle<FMassMovementParameters> MovementParamsHandle;
 	TStateTreeExternalDataHandle<FMassNavMeshCachedPathFragment> CachedPathHandle;
 	TStateTreeExternalDataHandle<FMassNavMeshShortPathFragment> ShortPathHandle;
+	TStateTreeExternalDataHandle<FMassRepresentationLODFragment> RepresentationLODHandle;
 	TStateTreeExternalDataHandle<UMassSignalSubsystem> MassSignalSubsystemHandle;
 };

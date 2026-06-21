@@ -8,6 +8,7 @@
 #include "MassMovementFragments.h"
 #include "MassNavigationFragments.h"
 #include "MassNavMeshNavigationFragments.h"
+#include "MassRepresentationFragments.h"
 #include "NavCorridor.h"
 #include "NavigationSystem.h"
 #include "NavigationData.h"
@@ -17,6 +18,20 @@ static TAutoConsoleVariable<bool> CVarDrawMoveGoal(
 	TEXT("mc.DrawMoveGoal"),
 	false,
 	TEXT("Draw MoveToTarget / MoveToTargetSlot goal per agent (blue = target, cyan = slot)."));
+
+namespace
+{
+	float GetLODTickScale(EMassLOD::Type LOD)
+	{
+		switch (LOD)
+		{
+		case EMassLOD::High:   return 1.f;
+		case EMassLOD::Medium: return 3.f;
+		case EMassLOD::Low:    return 8.f;
+		default:               return 16.f;
+		}
+	}
+}
 
 bool FMCNpcMoveToTargetTask::Link(FStateTreeLinker& Linker)
 {
@@ -28,6 +43,7 @@ bool FMCNpcMoveToTargetTask::Link(FStateTreeLinker& Linker)
 	Linker.LinkExternalData(MovementParamsHandle);
 	Linker.LinkExternalData(CachedPathHandle);
 	Linker.LinkExternalData(ShortPathHandle);
+	Linker.LinkExternalData(RepresentationLODHandle);
 	Linker.LinkExternalData(MassSignalSubsystemHandle);
 	return true;
 }
@@ -66,6 +82,7 @@ void FMCNpcMoveToTargetTask::GetDependencies(UE::MassBehavior::FStateTreeDepende
 	Builder.AddReadOnly<FMassDesiredMovementFragment>();
 	Builder.AddReadWrite<FMassNavMeshCachedPathFragment>();
 	Builder.AddReadWrite<FMassNavMeshShortPathFragment>();
+	Builder.AddReadOnly<FMassRepresentationLODFragment>();
 }
 
 bool FMCNpcMoveToTargetTask::RequestPath(FStateTreeExecutionContext& Context) const
@@ -157,6 +174,9 @@ bool FMCNpcMoveToTargetTask::UpdateShortPath(FStateTreeExecutionContext& Context
 
 void FMCNpcMoveToTargetTask::ScheduleNextTick(FStateTreeExecutionContext& Context, float Delay) const
 {
+	const FMassRepresentationLODFragment& RepLOD = Context.GetExternalData(RepresentationLODHandle);
+	Delay *= GetLODTickScale(RepLOD.LOD);
+
 	FMassStateTreeExecutionContext& MassContext = static_cast<FMassStateTreeExecutionContext&>(Context);
 	UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
 	SignalSubsystem.DelaySignalEntityDeferred(MassContext.GetMassEntityExecutionContext(),
