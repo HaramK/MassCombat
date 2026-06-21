@@ -2,20 +2,19 @@
 
 #include "CoreMinimal.h"
 #include "MassProcessor.h"
-#include "MCNpcTargetingProcessor.generated.h"
+#include "MCNpcDeathProcessor.generated.h"
 
 UCLASS()
-class MASSCOMBAT_API UMCNpcTargetingProcessor : public UMassProcessor
+class MASSCOMBAT_API UMCNpcDeathProcessor : public UMassProcessor
 {
 	GENERATED_BODY()
 
 public:
-	UMCNpcTargetingProcessor();
+	UMCNpcDeathProcessor();
 
 protected:
 	virtual void ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager) override;
 	virtual void Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context) override;
 
-	FMassEntityQuery GatherQuery;
 	FMassEntityQuery EntityQuery;
 };

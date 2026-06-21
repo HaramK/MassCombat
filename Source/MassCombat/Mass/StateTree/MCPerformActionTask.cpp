@@ -8,6 +8,7 @@
 #include "MassStateTreeDependency.h"
 #include "MassStateTreeExecutionContext.h"
 #include "MassSignalSubsystem.h"
+#include "MassEntityUtils.h"
 #include "Engine/World.h"
 
 namespace
@@ -16,6 +17,7 @@ namespace
 	{
 		FMCActionStepContext Ctx;
 		Ctx.World = World;
+		Ctx.EntityManager = World ? &UE::Mass::Utils::GetEntityManagerChecked(*World) : nullptr;
 		Ctx.Anim = Anim;
 		Ctx.Combat = Combat;
 		Ctx.Now = Now;

@@ -1,7 +1,9 @@
 #include "Mass/Actions/MCActionStep.h"
 #include "Mass/Fragments/MCNpcCombatFragments.h"
+#include "Mass/Fragments/MCUnitFragments.h"
 #include "Animation/AnimMontage.h"
 #include "Engine/Engine.h"
+#include "MassEntityManager.h"
 
 float FMCActionStep_PlayMontage::GetDuration(const FMCActionStepContext& Ctx) const
 {
@@ -47,5 +49,24 @@ void FMCActionStep_RotateToTarget::OnEnd(const FMCActionStepContext& Ctx) const
 	if (Ctx.Combat)
 	{
 		Ctx.Combat->FaceTargetEndTime = 0.f;
+	}
+}
+
+void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
+{
+	if (!Ctx.EntityManager || !Ctx.Combat)
+	{
+		return;
+	}
+
+	const FMassEntityHandle Target = Ctx.Combat->CurrentTarget;
+	if (!Ctx.EntityManager->IsEntityValid(Target))
+	{
+		return;
+	}
+
+	if (FMCUnitFragment* TargetUnit = Ctx.EntityManager->GetFragmentDataPtr<FMCUnitFragment>(Target))
+	{
+		TargetUnit->Health -= Damage;
 	}
 }

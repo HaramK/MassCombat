@@ -18,3 +18,4 @@ protected:
 
 	FMassEntityQuery EntityQuery;
 };
+1.

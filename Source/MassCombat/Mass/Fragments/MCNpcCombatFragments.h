@@ -20,6 +20,8 @@ struct FMCNpcCombatFragment : public FMassFragment
 
 	float FaceTargetEndTime = 0.f;
 
+	FMassEntityHandle CurrentTarget;
+
 	uint8 bHasTarget : 1 = 0;
 
 	uint8 bMovementBlocked : 1 = 0;

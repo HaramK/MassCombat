@@ -5,12 +5,14 @@
 
 class UWorld;
 class UAnimMontage;
+struct FMassEntityManager;
 struct FMCNpcAnimStateFragment;
 struct FMCNpcCombatFragment;
 
 struct FMCActionStepContext
 {
 	UWorld* World = nullptr;
+	FMassEntityManager* EntityManager = nullptr;
 	FMCNpcAnimStateFragment* Anim = nullptr;
 	FMCNpcCombatFragment* Combat = nullptr;
 	float Now = 0.f;
@@ -82,4 +84,15 @@ struct FMCActionStep_RotateToTarget : public FMCActionStep
 	virtual float GetDuration(const FMCActionStepContext& Ctx) const override { return Duration; }
 	virtual void OnStart(const FMCActionStepContext& Ctx) const override;
 	virtual void OnEnd(const FMCActionStepContext& Ctx) const override;
+};
+
+USTRUCT(meta = (DisplayName = "Apply Damage"))
+struct FMCActionStep_ApplyDamage : public FMCActionStep
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, Category = "Step")
+	float Damage = 0.f;
+
+	virtual void OnStart(const FMCActionStepContext& Ctx) const override;
 };
