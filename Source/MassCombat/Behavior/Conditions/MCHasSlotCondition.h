@@ -1,0 +1,29 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "StateTreeConditionBase.h"
+#include "Combat/MCCombatFragments.h"
+#include "MCHasSlotCondition.generated.h"
+
+USTRUCT()
+struct FMCHasSlotConditionInstanceData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, Category = "Condition")
+	bool bInvert = false;
+};
+
+USTRUCT(meta = (DisplayName = "MC Has Slot"))
+struct FMCHasSlotCondition : public FStateTreeConditionCommonBase
+{
+	GENERATED_BODY()
+
+	using FInstanceDataType = FMCHasSlotConditionInstanceData;
+
+	virtual bool Link(FStateTreeLinker& Linker) override;
+	virtual const UStruct* GetInstanceDataType() const override { return FInstanceDataType::StaticStruct(); }
+	virtual bool TestCondition(FStateTreeExecutionContext& Context) const override;
+
+	TStateTreeExternalDataHandle<FMCCombatFragment> CombatHandle;
+};

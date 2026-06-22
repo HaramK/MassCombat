@@ -8,7 +8,7 @@ public class MassCombat : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		// 서브폴더(Combat/, AI/, Actor/) 간 인클루드를 위해 모듈 루트를 검색 경로에 추가
+		// Add the module root so subsystem folders can be included via module-root-relative paths.
 		PublicIncludePaths.Add(ModuleDirectory);
 
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "MassEntity",
