@@ -42,6 +42,8 @@ struct FMCCombatFragment : public FMassFragment
 
 	float LastDamagedTime = -1.e6f;
 
+	float LastHitReactTime = -1.e6f;
+
 	float LastAttackTime = -1.e6f;
 
 	float NextRetargetTime = 0.f;

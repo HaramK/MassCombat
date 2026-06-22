@@ -222,6 +222,11 @@ EStateTreeRunStatus FMCMoveToTargetTask::Tick(FStateTreeExecutionContext& Contex
 			}
 		}
 
+		if (IsGoalReached(Combat, Data.AcceptanceRadius))
+		{
+			return EStateTreeRunStatus::Succeeded;
+		}
+
 		const bool bTargetMoved = FVector::DistSquared(GoalLocation, Data.LastRepathTargetLocation) > FMath::Square(Data.RepathDistanceThreshold);
 		if (bTargetMoved)
 		{
@@ -230,14 +235,16 @@ EStateTreeRunStatus FMCMoveToTargetTask::Tick(FStateTreeExecutionContext& Contex
 				Data.LastRepathTargetLocation = GoalLocation;
 			}
 		}
-		else if (ShortPath.IsDone() && ShortPath.bPartialResult)
+		else if (ShortPath.IsDone())
 		{
-			UpdateShortPath(Context);
-		}
-
-		if (IsGoalReached(Combat, Data.AcceptanceRadius))
-		{
-			return EStateTreeRunStatus::Succeeded;
+			if (ShortPath.bPartialResult)
+			{
+				UpdateShortPath(Context);
+			}
+			else if (RequestPath(Context))
+			{
+				Data.LastRepathTargetLocation = GoalLocation;
+			}
 		}
 	}
 

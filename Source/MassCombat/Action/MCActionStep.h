@@ -98,3 +98,11 @@ struct FMCActionStep_ApplyDamage : public FMCActionStep
 
 	virtual void OnStart(const FMCActionStepContext& Ctx) const override;
 };
+
+USTRUCT(meta = (DisplayName = "Mark Hit Reacted"))
+struct FMCActionStep_MarkHitReacted : public FMCActionStep
+{
+	GENERATED_BODY()
+
+	virtual void OnStart(const FMCActionStepContext& Ctx) const override;
+};

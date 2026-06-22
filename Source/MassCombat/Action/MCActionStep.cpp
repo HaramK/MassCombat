@@ -78,3 +78,11 @@ void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
 		TargetCombat->LastDamagedTime = Ctx.Now;
 	}
 }
+
+void FMCActionStep_MarkHitReacted::OnStart(const FMCActionStepContext& Ctx) const
+{
+	if (Ctx.Combat)
+	{
+		Ctx.Combat->LastHitReactTime = Ctx.Now;
+	}
+}
