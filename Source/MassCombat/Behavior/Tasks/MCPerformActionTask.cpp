@@ -5,6 +5,7 @@
 #include "Combat/MCCombatFragments.h"
 #include "Targeting/MCTargetingFragments.h"
 #include "Movement/MCOrientationFragments.h"
+#include "MassNavigationFragments.h"
 #include "Representation/MCRepresentationFragments.h"
 #include "StateTreeExecutionContext.h"
 #include "StateTreeLinker.h"
@@ -112,6 +113,7 @@ bool FMCPerformActionTask::Link(FStateTreeLinker& Linker)
 	Linker.LinkExternalData(AnimHandle);
 	Linker.LinkExternalData(TargetingHandle);
 	Linker.LinkExternalData(OrientationHandle);
+	Linker.LinkExternalData(MoveTargetHandle);
 	Linker.LinkExternalData(EngagementHandle);
 	Linker.LinkExternalData(MassSignalSubsystemHandle);
 	return true;
@@ -123,6 +125,7 @@ void FMCPerformActionTask::GetDependencies(UE::MassBehavior::FStateTreeDependenc
 	Builder.AddReadWrite<FMCAnimStateFragment>();
 	Builder.AddReadOnly<FMCTargetingFragment>();
 	Builder.AddReadWrite<FMCOrientationFragment>();
+	Builder.AddReadWrite<FMassMoveTargetFragment>();
 	Builder.AddReadWrite<FMCEngagementFragment>();
 }
 
@@ -162,9 +165,13 @@ EStateTreeRunStatus FMCPerformActionTask::EnterState(FStateTreeExecutionContext&
 		return EStateTreeRunStatus::Failed;
 	}
 
-	if (Def->bBlockMovementWhileActive)
+	if (Def->bBlockMovementWhileActive && World)
 	{
 		Orientation.bMovementBlocked = true;
+
+		FMassMoveTargetFragment& MoveTarget = Context.GetExternalData(MoveTargetHandle);
+		MoveTarget.CreateNewAction(EMassMovementAction::Animate, *World);
+		MoveTarget.DesiredSpeed.Set(0.f);
 	}
 
 	Data.LockedTarget = Targeting.CurrentTarget;
@@ -243,9 +250,13 @@ void FMCPerformActionTask::ExitState(FStateTreeExecutionContext& Context, const 
 
 	const UMCActionDef* Def = Set.Actions.IsValidIndex(Data.ActionIndex) ? Set.Actions[Data.ActionIndex] : nullptr;
 
-	if (Def && Def->bBlockMovementWhileActive)
+	if (Def && Def->bBlockMovementWhileActive && World)
 	{
 		Orientation.bMovementBlocked = false;
+
+		FMassMoveTargetFragment& MoveTarget = Context.GetExternalData(MoveTargetHandle);
+		MoveTarget.CreateNewAction(EMassMovementAction::Stand, *World);
+		MoveTarget.DesiredSpeed.Set(0.f);
 	}
 
 	if (!FMCActionLib::IsRunning(ActionFrag, Data.ActionIndex, Now))

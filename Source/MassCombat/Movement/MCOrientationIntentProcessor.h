@@ -2,15 +2,15 @@
 
 #include "CoreMinimal.h"
 #include "MassProcessor.h"
-#include "MCCombatMovementProcessor.generated.h"
+#include "MCOrientationIntentProcessor.generated.h"
 
 UCLASS()
-class MASSCOMBAT_API UMCCombatMovementProcessor : public UMassProcessor
+class MASSCOMBAT_API UMCOrientationIntentProcessor : public UMassProcessor
 {
 	GENERATED_BODY()
 
 public:
-	UMCCombatMovementProcessor();
+	UMCOrientationIntentProcessor();
 
 protected:
 	virtual void ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager) override;

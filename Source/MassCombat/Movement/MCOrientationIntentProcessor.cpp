@@ -1,6 +1,6 @@
-#include "Combat/MCCombatMovementProcessor.h"
-#include "Targeting/MCTargetingFragments.h"
+#include "Movement/MCOrientationIntentProcessor.h"
 #include "Movement/MCOrientationFragments.h"
+#include "Targeting/MCTargetingFragments.h"
 #include "MassExecutionContext.h"
 #include "MassCommonFragments.h"
 #include "MassCommonTypes.h"
@@ -8,7 +8,7 @@
 #include "MassNavigationFragments.h"
 #include "Engine/World.h"
 
-UMCCombatMovementProcessor::UMCCombatMovementProcessor()
+UMCOrientationIntentProcessor::UMCOrientationIntentProcessor()
 	: EntityQuery(*this)
 {
 	ExecutionFlags = (int32)(EProcessorExecutionFlags::Standalone | EProcessorExecutionFlags::Client | EProcessorExecutionFlags::Server);
@@ -17,7 +17,7 @@ UMCCombatMovementProcessor::UMCCombatMovementProcessor()
 	bRequiresGameThreadExecution = true;
 }
 
-void UMCCombatMovementProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
+void UMCOrientationIntentProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FMCTargetingFragment>(EMassFragmentAccess::ReadOnly);
@@ -25,7 +25,7 @@ void UMCCombatMovementProcessor::ConfigureQueries(const TSharedRef<FMassEntityMa
 	EntityQuery.AddRequirement<FMassMoveTargetFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::Optional);
 }
 
-void UMCCombatMovementProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
+void UMCOrientationIntentProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
 	UWorld* World = EntityManager.GetWorld();
 	if (!World)
@@ -35,7 +35,7 @@ void UMCCombatMovementProcessor::Execute(FMassEntityManager& EntityManager, FMas
 	const float DeltaTime = World->GetDeltaSeconds();
 	const float Now = World->GetTimeSeconds();
 
-	EntityQuery.ForEachEntityChunk(Context, [World, DeltaTime, Now](FMassExecutionContext& Ctx)
+	EntityQuery.ForEachEntityChunk(Context, [DeltaTime, Now](FMassExecutionContext& Ctx)
 	{
 		const TArrayView<FTransformFragment> Transforms = Ctx.GetMutableFragmentView<FTransformFragment>();
 		const TConstArrayView<FMCTargetingFragment> Targetings = Ctx.GetFragmentView<FMCTargetingFragment>();
@@ -49,53 +49,52 @@ void UMCCombatMovementProcessor::Execute(FMassEntityManager& EntityManager, FMas
 			const FMCTargetingFragment& Targeting = Targetings[i];
 			const FMCOrientationFragment& Orientation = Orientations[i];
 
-			if (Orientation.bMovementBlocked && bHasMoveTarget)
+			const bool bFaceTarget = Orientation.FaceTargetEndTime > Now && Targeting.bHasTarget;
+			const bool bLookAt = !bFaceTarget && Orientation.bLookAtNearestEnemy
+				&& (Targeting.bHasTarget || Targeting.bHasNearestEnemy);
+			if (!bFaceTarget && !bLookAt)
 			{
-				FMassMoveTargetFragment& MoveTarget = MoveTargets[i];
-				if (MoveTarget.GetCurrentAction() != EMassMovementAction::Animate)
-				{
-					MoveTarget.CreateNewAction(EMassMovementAction::Animate, *World);
-					MoveTarget.DesiredSpeed.Set(0.f);
-				}
+				continue;
 			}
 
-			if (Orientation.FaceTargetEndTime > Now && Targeting.bHasTarget)
+			FTransform& Xf = Transforms[i].GetMutableTransform();
+			const FVector Anchor = bFaceTarget ? Targeting.TargetLocation
+				: (Targeting.bHasTarget ? Targeting.TargetLocation : Targeting.NearestEnemyLocation);
+			FVector ToAnchor = Anchor - Xf.GetLocation();
+			ToAnchor.Z = 0.f;
+			if (ToAnchor.IsNearlyZero())
 			{
-				FTransform& Xf = Transforms[i].GetMutableTransform();
+				continue;
+			}
 
-				FVector ToTarget = Targeting.TargetLocation - Xf.GetLocation();
-				ToTarget.Z = 0.f;
-				if (!ToTarget.IsNearlyZero())
+			const bool bExternallyDriven = !bHasMoveTarget
+				|| MoveTargets[i].GetCurrentAction() == EMassMovementAction::Animate;
+
+			if (bExternallyDriven)
+			{
+				FQuat NewQ;
+				if (bFaceTarget)
 				{
-					const FQuat DesiredQ = ToTarget.Rotation().Quaternion();
+					const FQuat DesiredQ = ToAnchor.Rotation().Quaternion();
 					const float Remaining = Orientation.FaceTargetEndTime - Now;
 					const float Alpha = (Remaining > DeltaTime) ? (DeltaTime / Remaining) : 1.f;
-					const FQuat NewQ = FQuat::Slerp(Xf.GetRotation(), DesiredQ, Alpha).GetNormalized();
-					Xf.SetRotation(NewQ);
+					NewQ = FQuat::Slerp(Xf.GetRotation(), DesiredQ, Alpha).GetNormalized();
+				}
+				else
+				{
+					const FRotator NewRot = FMath::RInterpConstantTo(Xf.Rotator(), ToAnchor.Rotation(), DeltaTime, Orientation.LookAtTurnRate);
+					NewQ = NewRot.Quaternion();
+				}
 
-					if (bHasMoveTarget)
-					{
-						MoveTargets[i].Forward = NewQ.GetForwardVector();
-					}
+				Xf.SetRotation(NewQ);
+				if (bHasMoveTarget)
+				{
+					MoveTargets[i].Forward = NewQ.GetForwardVector();
 				}
 			}
-			else if (Orientation.bLookAtNearestEnemy && Targeting.bHasNearestEnemy)
+			else
 			{
-				FTransform& Xf = Transforms[i].GetMutableTransform();
-
-				FVector ToEnemy = Targeting.NearestEnemyLocation - Xf.GetLocation();
-				ToEnemy.Z = 0.f;
-				if (!ToEnemy.IsNearlyZero())
-				{
-					const FRotator NewRot = FMath::RInterpConstantTo(Xf.Rotator(), ToEnemy.Rotation(), DeltaTime, Orientation.LookAtTurnRate);
-					const FQuat NewQ = NewRot.Quaternion();
-					Xf.SetRotation(NewQ);
-
-					if (bHasMoveTarget)
-					{
-						MoveTargets[i].Forward = NewQ.GetForwardVector();
-					}
-				}
+				MoveTargets[i].Forward = ToAnchor.GetSafeNormal();
 			}
 		}
 	});
