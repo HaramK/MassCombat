@@ -45,8 +45,18 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 		uint8 Faction;
 	};
 
+	if (!EntityManager.IsEntityValid(PlayerEntity))
+	{
+		return 0;
+	}
+	const FMCUnitInfoFragment* PlayerInfo = EntityManager.GetConstSharedFragmentDataPtr<FMCUnitInfoFragment>(PlayerEntity);
+	if (!PlayerInfo)
+	{
+		return 0;
+	}
+	const uint8 PlayerFaction = PlayerInfo->Faction;
+
 	TArray<FHitCandidate> Candidates;
-	uint8 PlayerFaction = TNumericLimits<uint8>::Max();
 
 	FMassEntityQuery Query(EntityManager.AsShared());
 	Query.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
@@ -55,7 +65,7 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 	Query.AddConstSharedRequirement<FMCUnitInfoFragment>();
 
 	FMassExecutionContext Context(EntityManager);
-	Query.ForEachEntityChunk(Context, [&Candidates, &PlayerFaction, PlayerEntity](FMassExecutionContext& Ctx)
+	Query.ForEachEntityChunk(Context, [&Candidates, PlayerEntity](FMassExecutionContext& Ctx)
 	{
 		const uint8 Faction = Ctx.GetConstSharedFragment<FMCUnitInfoFragment>().Faction;
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
@@ -67,7 +77,6 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 		{
 			if (Ctx.GetEntity(i) == PlayerEntity)
 			{
-				PlayerFaction = Faction;
 				continue;
 			}
 			if (Units[i].Health <= 0.f)
