@@ -7,6 +7,7 @@
 
 struct FMCTargetingFragment;
 class UWorld;
+class UMassNavigationSubsystem;
 
 struct FMCTargetCandidate
 {
@@ -26,6 +27,7 @@ struct FMCAttacker
 	int32 EntityIndex;
 	int32 TargetIdx;
 	int32 SlotIndex;
+	int32 NearestEnemyIdx;
 	float NextRetargetTime;
 	FMassEntityHandle Handle;
 	FMassEntityHandle PrevTarget;
@@ -34,6 +36,7 @@ struct FMCAttacker
 	float LastAttackTime;
 	bool bPreferPlayer;
 	float PlayerRadiusSq;
+	float SearchRadius;
 };
 
 UCLASS()
@@ -61,6 +64,8 @@ protected:
 
 	FMassEntityQuery GatherQuery;
 	FMassEntityQuery EntityQuery;
+
+	UMassNavigationSubsystem* NavSubsystem = nullptr;
 
 	TArray<FMCTargetCandidate> Candidates;
 	TArray<FMCAttacker> Attackers;
