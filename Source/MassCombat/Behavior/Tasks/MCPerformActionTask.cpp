@@ -167,8 +167,6 @@ EStateTreeRunStatus FMCPerformActionTask::EnterState(FStateTreeExecutionContext&
 
 	if (Def->bBlockMovementWhileActive && World)
 	{
-		Orientation.bMovementBlocked = true;
-
 		FMassMoveTargetFragment& MoveTarget = Context.GetExternalData(MoveTargetHandle);
 		MoveTarget.CreateNewAction(EMassMovementAction::Animate, *World);
 		MoveTarget.DesiredSpeed.Set(0.f);
@@ -252,8 +250,6 @@ void FMCPerformActionTask::ExitState(FStateTreeExecutionContext& Context, const 
 
 	if (Def && Def->bBlockMovementWhileActive && World)
 	{
-		Orientation.bMovementBlocked = false;
-
 		FMassMoveTargetFragment& MoveTarget = Context.GetExternalData(MoveTargetHandle);
 		MoveTarget.CreateNewAction(EMassMovementAction::Stand, *World);
 		MoveTarget.DesiredSpeed.Set(0.f);

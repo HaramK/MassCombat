@@ -14,6 +14,4 @@ struct FMCOrientationFragment : public FMassFragment
 	float LookAtTurnRate = 0.f;
 
 	uint8 bLookAtNearestEnemy : 1 = 0;
-
-	uint8 bMovementBlocked : 1 = 0;
 };
