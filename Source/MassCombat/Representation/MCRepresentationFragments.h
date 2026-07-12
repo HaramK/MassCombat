@@ -6,6 +6,7 @@
 #include "MCRepresentationFragments.generated.h"
 
 class UAnimMontage;
+class UAnimSequence;
 
 USTRUCT()
 struct FMCAnimStateFragment : public FMassFragment
@@ -35,7 +36,7 @@ struct FMCAnimParams : public FMassConstSharedFragment
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, Category = "Anim")
-	float WalkSpeedThresholdSq = 100.f;
+	float WalkSpeedThreshold = 10.f;
 
 	UPROPERTY(EditAnywhere, Category = "Anim")
 	float WalkAnimReferenceSpeed = 140.f;
@@ -47,11 +48,17 @@ struct FMCAnimParams : public FMassConstSharedFragment
 	float MaxWalkPlayRate = 2.0f;
 
 	UPROPERTY(EditAnywhere, Category = "Anim")
-	int32 IdleStateIndex = 0;
+	TObjectPtr<UAnimSequence> IdleAnim;
 
 	UPROPERTY(EditAnywhere, Category = "Anim")
-	int32 WalkStateIndex = 1;
+	TObjectPtr<UAnimSequence> WalkAnim;
 
 	UPROPERTY(EditAnywhere, Category = "Anim")
 	TObjectPtr<UAnimToTextureDataAsset> DefaultAnimData;
+
+	UPROPERTY()
+	int32 IdleStateIndex = 0;
+
+	UPROPERTY()
+	int32 WalkStateIndex = 1;
 };

@@ -2,10 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "MassEntityTraitBase.h"
-#include "MCCombatTrait.generated.h"
+#include "MCOrientationTrait.generated.h"
 
-UCLASS(meta = (DisplayName = "MC Combat"))
-class MASSCOMBAT_API UMCCombatTrait : public UMassEntityTraitBase
+UCLASS(meta = (DisplayName = "MC Orientation"))
+class MASSCOMBAT_API UMCOrientationTrait : public UMassEntityTraitBase
 {
 	GENERATED_BODY()
 
