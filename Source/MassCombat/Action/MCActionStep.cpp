@@ -21,7 +21,7 @@ void FMCActionStep_PlayMontage::OnStart(const FMCActionStepContext& Ctx) const
 
 void FMCActionStep_PlayMontage::OnEnd(const FMCActionStepContext& Ctx) const
 {
-	if (Ctx.Anim)
+	if (Ctx.Anim && Ctx.Anim->ActiveMontage.Get() == Montage.Get())
 	{
 		Ctx.Anim->ActiveMontage = nullptr;
 		Ctx.Anim->ActiveMontageStateIndex = INDEX_NONE;

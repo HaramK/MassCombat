@@ -55,7 +55,7 @@ void UMCCombatMovementProcessor::Execute(FMassEntityManager& EntityManager, FMas
 				}
 			}
 
-			if (Combat.FaceTargetEndTime > 0.f && Combat.bHasTarget)
+			if (Combat.FaceTargetEndTime > Now && Combat.bHasTarget)
 			{
 				FTransform& Xf = Transforms[i].GetMutableTransform();
 
