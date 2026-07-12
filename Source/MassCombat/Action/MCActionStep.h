@@ -8,7 +8,7 @@ class UWorld;
 class UAnimMontage;
 struct FMassEntityManager;
 struct FMCAnimStateFragment;
-struct FMCCombatFragment;
+struct FMCOrientationFragment;
 struct FMCEngagementFragment;
 
 struct FMCActionStepContext
@@ -16,7 +16,7 @@ struct FMCActionStepContext
 	UWorld* World = nullptr;
 	FMassEntityManager* EntityManager = nullptr;
 	FMCAnimStateFragment* Anim = nullptr;
-	FMCCombatFragment* Combat = nullptr;
+	FMCOrientationFragment* Orientation = nullptr;
 	FMCEngagementFragment* Engagement = nullptr;
 	FMassEntityHandle SelfEntity;
 	FMassEntityHandle LockedTarget;

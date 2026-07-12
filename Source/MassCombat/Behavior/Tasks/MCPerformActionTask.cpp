@@ -3,6 +3,8 @@
 #include "Action/MCActionDef.h"
 #include "Action/MCActionStep.h"
 #include "Combat/MCCombatFragments.h"
+#include "Targeting/MCTargetingFragments.h"
+#include "Movement/MCOrientationFragments.h"
 #include "Representation/MCRepresentationFragments.h"
 #include "StateTreeExecutionContext.h"
 #include "StateTreeLinker.h"
@@ -14,7 +16,7 @@
 
 namespace
 {
-	FMCActionStepContext MakeStepContext(UWorld* World, FMassEntityHandle SelfEntity, FMassEntityHandle LockedTarget, FMCAnimStateFragment* Anim, FMCCombatFragment* Combat, FMCEngagementFragment* Engagement, float Now)
+	FMCActionStepContext MakeStepContext(UWorld* World, FMassEntityHandle SelfEntity, FMassEntityHandle LockedTarget, FMCAnimStateFragment* Anim, FMCOrientationFragment* Orientation, FMCEngagementFragment* Engagement, float Now)
 	{
 		FMCActionStepContext Ctx;
 		Ctx.World = World;
@@ -22,7 +24,7 @@ namespace
 		Ctx.SelfEntity = SelfEntity;
 		Ctx.LockedTarget = LockedTarget;
 		Ctx.Anim = Anim;
-		Ctx.Combat = Combat;
+		Ctx.Orientation = Orientation;
 		Ctx.Engagement = Engagement;
 		Ctx.Now = Now;
 		return Ctx;
@@ -108,7 +110,8 @@ bool FMCPerformActionTask::Link(FStateTreeLinker& Linker)
 	Linker.LinkExternalData(ActionHandle);
 	Linker.LinkExternalData(ActionSetHandle);
 	Linker.LinkExternalData(AnimHandle);
-	Linker.LinkExternalData(CombatHandle);
+	Linker.LinkExternalData(TargetingHandle);
+	Linker.LinkExternalData(OrientationHandle);
 	Linker.LinkExternalData(EngagementHandle);
 	Linker.LinkExternalData(MassSignalSubsystemHandle);
 	return true;
@@ -118,7 +121,8 @@ void FMCPerformActionTask::GetDependencies(UE::MassBehavior::FStateTreeDependenc
 {
 	Builder.AddReadWrite<FMCActionFragment>();
 	Builder.AddReadWrite<FMCAnimStateFragment>();
-	Builder.AddReadWrite<FMCCombatFragment>();
+	Builder.AddReadOnly<FMCTargetingFragment>();
+	Builder.AddReadWrite<FMCOrientationFragment>();
 	Builder.AddReadWrite<FMCEngagementFragment>();
 }
 
@@ -136,7 +140,8 @@ EStateTreeRunStatus FMCPerformActionTask::EnterState(FStateTreeExecutionContext&
 	FMCActionFragment& ActionFrag = Context.GetExternalData(ActionHandle);
 	const FMCActionSetParams& Set = Context.GetExternalData(ActionSetHandle);
 	FMCAnimStateFragment& Anim = Context.GetExternalData(AnimHandle);
-	FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
+	const FMCTargetingFragment& Targeting = Context.GetExternalData(TargetingHandle);
+	FMCOrientationFragment& Orientation = Context.GetExternalData(OrientationHandle);
 	FMCEngagementFragment& Engagement = Context.GetExternalData(EngagementHandle);
 	const UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
 
@@ -159,12 +164,12 @@ EStateTreeRunStatus FMCPerformActionTask::EnterState(FStateTreeExecutionContext&
 
 	if (Def->bBlockMovementWhileActive)
 	{
-		Combat.bMovementBlocked = true;
+		Orientation.bMovementBlocked = true;
 	}
 
-	Data.LockedTarget = Combat.CurrentTarget;
+	Data.LockedTarget = Targeting.CurrentTarget;
 
-	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, &Engagement, Now);
+	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Orientation, &Engagement, Now);
 
 	Data.Cursors.SetNum(Def->Tracks.Num());
 	for (int32 t = 0; t < Def->Tracks.Num(); ++t)
@@ -188,7 +193,8 @@ EStateTreeRunStatus FMCPerformActionTask::Tick(FStateTreeExecutionContext& Conte
 	FMCActionFragment& ActionFrag = Context.GetExternalData(ActionHandle);
 	const FMCActionSetParams& Set = Context.GetExternalData(ActionSetHandle);
 	FMCAnimStateFragment& Anim = Context.GetExternalData(AnimHandle);
-	FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
+	const FMCTargetingFragment& Targeting = Context.GetExternalData(TargetingHandle);
+	FMCOrientationFragment& Orientation = Context.GetExternalData(OrientationHandle);
 	FMCEngagementFragment& Engagement = Context.GetExternalData(EngagementHandle);
 	const UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
 
@@ -202,7 +208,7 @@ EStateTreeRunStatus FMCPerformActionTask::Tick(FStateTreeExecutionContext& Conte
 		return EStateTreeRunStatus::Failed;
 	}
 
-	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, &Engagement, Now);
+	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Orientation, &Engagement, Now);
 
 	const int32 Count = FMath::Min(Data.Cursors.Num(), Def->Tracks.Num());
 	for (int32 t = 0; t < Count; ++t)
@@ -226,7 +232,8 @@ void FMCPerformActionTask::ExitState(FStateTreeExecutionContext& Context, const 
 	FMCActionFragment& ActionFrag = Context.GetExternalData(ActionHandle);
 	const FMCActionSetParams& Set = Context.GetExternalData(ActionSetHandle);
 	FMCAnimStateFragment& Anim = Context.GetExternalData(AnimHandle);
-	FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
+	const FMCTargetingFragment& Targeting = Context.GetExternalData(TargetingHandle);
+	FMCOrientationFragment& Orientation = Context.GetExternalData(OrientationHandle);
 	FMCEngagementFragment& Engagement = Context.GetExternalData(EngagementHandle);
 	const UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
 
@@ -238,7 +245,7 @@ void FMCPerformActionTask::ExitState(FStateTreeExecutionContext& Context, const 
 
 	if (Def && Def->bBlockMovementWhileActive)
 	{
-		Combat.bMovementBlocked = false;
+		Orientation.bMovementBlocked = false;
 	}
 
 	if (!FMCActionLib::IsRunning(ActionFrag, Data.ActionIndex, Now))
@@ -248,7 +255,7 @@ void FMCPerformActionTask::ExitState(FStateTreeExecutionContext& Context, const 
 
 	if (Def)
 	{
-		const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, &Engagement, Now);
+		const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Orientation, &Engagement, Now);
 		const int32 Count = FMath::Min(Data.Cursors.Num(), Def->Tracks.Num());
 		for (int32 t = 0; t < Count; ++t)
 		{

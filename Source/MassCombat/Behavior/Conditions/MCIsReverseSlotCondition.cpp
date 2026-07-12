@@ -4,14 +4,14 @@
 
 bool FMCIsReverseSlotCondition::Link(FStateTreeLinker& Linker)
 {
-	Linker.LinkExternalData(CombatHandle);
+	Linker.LinkExternalData(TargetingHandle);
 	return true;
 }
 
 bool FMCIsReverseSlotCondition::TestCondition(FStateTreeExecutionContext& Context) const
 {
 	const FInstanceDataType& Data = Context.GetInstanceData(*this);
-	const FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
-	const bool bReverse = Combat.bReverseSlot != 0;
+	const FMCTargetingFragment& Targeting = Context.GetExternalData(TargetingHandle);
+	const bool bReverse = Targeting.bReverseSlot != 0;
 	return Data.bInvert ? !bReverse : bReverse;
 }

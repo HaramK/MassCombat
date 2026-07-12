@@ -13,7 +13,8 @@ namespace UE::MassBehavior
 
 class UMassSignalSubsystem;
 struct FMCAnimStateFragment;
-struct FMCCombatFragment;
+struct FMCTargetingFragment;
+struct FMCOrientationFragment;
 struct FMCEngagementFragment;
 
 USTRUCT()
@@ -66,7 +67,8 @@ protected:
 	TStateTreeExternalDataHandle<FMCActionFragment> ActionHandle;
 	TStateTreeExternalDataHandle<FMCActionSetParams> ActionSetHandle;
 	TStateTreeExternalDataHandle<FMCAnimStateFragment> AnimHandle;
-	TStateTreeExternalDataHandle<FMCCombatFragment> CombatHandle;
+	TStateTreeExternalDataHandle<FMCTargetingFragment> TargetingHandle;
+	TStateTreeExternalDataHandle<FMCOrientationFragment> OrientationHandle;
 	TStateTreeExternalDataHandle<FMCEngagementFragment> EngagementHandle;
 	TStateTreeExternalDataHandle<UMassSignalSubsystem> MassSignalSubsystemHandle;
 

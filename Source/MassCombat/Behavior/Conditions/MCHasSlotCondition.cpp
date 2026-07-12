@@ -4,14 +4,14 @@
 
 bool FMCHasSlotCondition::Link(FStateTreeLinker& Linker)
 {
-	Linker.LinkExternalData(CombatHandle);
+	Linker.LinkExternalData(TargetingHandle);
 	return true;
 }
 
 bool FMCHasSlotCondition::TestCondition(FStateTreeExecutionContext& Context) const
 {
 	const FInstanceDataType& Data = Context.GetInstanceData(*this);
-	const FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
-	const bool bHas = Combat.bHasTarget != 0 && Combat.SlotIndex != INDEX_NONE;
+	const FMCTargetingFragment& Targeting = Context.GetExternalData(TargetingHandle);
+	const bool bHas = Targeting.bHasTarget != 0 && Targeting.SlotIndex != INDEX_NONE;
 	return Data.bInvert ? !bHas : bHas;
 }

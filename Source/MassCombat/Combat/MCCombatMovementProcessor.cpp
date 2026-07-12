@@ -1,5 +1,6 @@
 #include "Combat/MCCombatMovementProcessor.h"
-#include "Combat/MCCombatFragments.h"
+#include "Targeting/MCTargetingFragments.h"
+#include "Movement/MCOrientationFragments.h"
 #include "MassExecutionContext.h"
 #include "MassCommonFragments.h"
 #include "MassCommonTypes.h"
@@ -19,7 +20,8 @@ UMCCombatMovementProcessor::UMCCombatMovementProcessor()
 void UMCCombatMovementProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadWrite);
-	EntityQuery.AddRequirement<FMCCombatFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddRequirement<FMCTargetingFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddRequirement<FMCOrientationFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddRequirement<FMassMoveTargetFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::Optional);
 }
 
@@ -36,16 +38,18 @@ void UMCCombatMovementProcessor::Execute(FMassEntityManager& EntityManager, FMas
 	EntityQuery.ForEachEntityChunk(Context, [World, DeltaTime, Now](FMassExecutionContext& Ctx)
 	{
 		const TArrayView<FTransformFragment> Transforms = Ctx.GetMutableFragmentView<FTransformFragment>();
-		const TConstArrayView<FMCCombatFragment> Combats = Ctx.GetFragmentView<FMCCombatFragment>();
+		const TConstArrayView<FMCTargetingFragment> Targetings = Ctx.GetFragmentView<FMCTargetingFragment>();
+		const TConstArrayView<FMCOrientationFragment> Orientations = Ctx.GetFragmentView<FMCOrientationFragment>();
 		const TArrayView<FMassMoveTargetFragment> MoveTargets = Ctx.GetMutableFragmentView<FMassMoveTargetFragment>();
 		const bool bHasMoveTarget = MoveTargets.Num() > 0;
 
 		const int32 Num = Ctx.GetNumEntities();
 		for (int32 i = 0; i < Num; ++i)
 		{
-			const FMCCombatFragment& Combat = Combats[i];
+			const FMCTargetingFragment& Targeting = Targetings[i];
+			const FMCOrientationFragment& Orientation = Orientations[i];
 
-			if (Combat.bMovementBlocked && bHasMoveTarget)
+			if (Orientation.bMovementBlocked && bHasMoveTarget)
 			{
 				FMassMoveTargetFragment& MoveTarget = MoveTargets[i];
 				if (MoveTarget.GetCurrentAction() != EMassMovementAction::Animate)
@@ -55,16 +59,16 @@ void UMCCombatMovementProcessor::Execute(FMassEntityManager& EntityManager, FMas
 				}
 			}
 
-			if (Combat.FaceTargetEndTime > Now && Combat.bHasTarget)
+			if (Orientation.FaceTargetEndTime > Now && Targeting.bHasTarget)
 			{
 				FTransform& Xf = Transforms[i].GetMutableTransform();
 
-				FVector ToTarget = Combat.TargetLocation - Xf.GetLocation();
+				FVector ToTarget = Targeting.TargetLocation - Xf.GetLocation();
 				ToTarget.Z = 0.f;
 				if (!ToTarget.IsNearlyZero())
 				{
 					const FQuat DesiredQ = ToTarget.Rotation().Quaternion();
-					const float Remaining = Combat.FaceTargetEndTime - Now;
+					const float Remaining = Orientation.FaceTargetEndTime - Now;
 					const float Alpha = (Remaining > DeltaTime) ? (DeltaTime / Remaining) : 1.f;
 					const FQuat NewQ = FQuat::Slerp(Xf.GetRotation(), DesiredQ, Alpha).GetNormalized();
 					Xf.SetRotation(NewQ);
@@ -75,15 +79,15 @@ void UMCCombatMovementProcessor::Execute(FMassEntityManager& EntityManager, FMas
 					}
 				}
 			}
-			else if (Combat.bLookAtNearestEnemy && Combat.bHasNearestEnemy)
+			else if (Orientation.bLookAtNearestEnemy && Targeting.bHasNearestEnemy)
 			{
 				FTransform& Xf = Transforms[i].GetMutableTransform();
 
-				FVector ToEnemy = Combat.NearestEnemyLocation - Xf.GetLocation();
+				FVector ToEnemy = Targeting.NearestEnemyLocation - Xf.GetLocation();
 				ToEnemy.Z = 0.f;
 				if (!ToEnemy.IsNearlyZero())
 				{
-					const FRotator NewRot = FMath::RInterpConstantTo(Xf.Rotator(), ToEnemy.Rotation(), DeltaTime, Combat.LookAtTurnRate);
+					const FRotator NewRot = FMath::RInterpConstantTo(Xf.Rotator(), ToEnemy.Rotation(), DeltaTime, Orientation.LookAtTurnRate);
 					const FQuat NewQ = NewRot.Quaternion();
 					Xf.SetRotation(NewQ);
 

@@ -4,26 +4,26 @@
 
 bool FMCDistanceCondition::Link(FStateTreeLinker& Linker)
 {
-	Linker.LinkExternalData(CombatHandle);
+	Linker.LinkExternalData(TargetingHandle);
 	return true;
 }
 
 bool FMCDistanceCondition::TestCondition(FStateTreeExecutionContext& Context) const
 {
 	const FInstanceDataType& Data = Context.GetInstanceData(*this);
-	const FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
+	const FMCTargetingFragment& Targeting = Context.GetExternalData(TargetingHandle);
 
 	float Dist;
 	switch (Data.Source)
 	{
 	case EMCDistanceSource::NearestEnemy:
-		Dist = Combat.DistanceToNearestEnemy;
+		Dist = Targeting.DistanceToNearestEnemy;
 		break;
 	case EMCDistanceSource::TargetSlot:
-		Dist = Combat.DistanceToSlot;
+		Dist = Targeting.DistanceToSlot;
 		break;
 	default:
-		Dist = Combat.DistanceToTarget;
+		Dist = Targeting.DistanceToTarget;
 		break;
 	}
 

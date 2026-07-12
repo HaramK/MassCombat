@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "MassStateTreeTypes.h"
-#include "Combat/MCCombatFragments.h"
+#include "Movement/MCOrientationFragments.h"
 #include "MCLookAtNearestEnemyTask.generated.h"
 
 namespace UE::MassBehavior
@@ -35,7 +35,7 @@ protected:
 
 	void ScheduleNextTick(FStateTreeExecutionContext& Context, float Delay) const;
 
-	TStateTreeExternalDataHandle<FMCCombatFragment> CombatHandle;
+	TStateTreeExternalDataHandle<FMCOrientationFragment> OrientationHandle;
 	TStateTreeExternalDataHandle<UMassSignalSubsystem> MassSignalSubsystemHandle;
 
 	UPROPERTY(EditAnywhere, Category = Parameter)

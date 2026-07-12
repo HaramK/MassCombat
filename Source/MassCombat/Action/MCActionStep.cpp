@@ -1,5 +1,6 @@
 #include "Action/MCActionStep.h"
 #include "Combat/MCCombatFragments.h"
+#include "Movement/MCOrientationFragments.h"
 #include "Representation/MCRepresentationFragments.h"
 #include "Unit/MCUnitFragments.h"
 #include "Animation/AnimMontage.h"
@@ -39,17 +40,17 @@ void FMCActionStep_Print::OnStart(const FMCActionStepContext& Ctx) const
 
 void FMCActionStep_RotateToTarget::OnStart(const FMCActionStepContext& Ctx) const
 {
-	if (Ctx.Combat)
+	if (Ctx.Orientation)
 	{
-		Ctx.Combat->FaceTargetEndTime = Ctx.Now + Duration;
+		Ctx.Orientation->FaceTargetEndTime = Ctx.Now + Duration;
 	}
 }
 
 void FMCActionStep_RotateToTarget::OnEnd(const FMCActionStepContext& Ctx) const
 {
-	if (Ctx.Combat)
+	if (Ctx.Orientation)
 	{
-		Ctx.Combat->FaceTargetEndTime = 0.f;
+		Ctx.Orientation->FaceTargetEndTime = 0.f;
 	}
 }
 

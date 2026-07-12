@@ -15,7 +15,7 @@ UMCDeathProcessor::UMCDeathProcessor()
 void UMCDeathProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
 	EntityQuery.AddRequirement<FMCUnitFragment>(EMassFragmentAccess::ReadOnly);
-	EntityQuery.AddRequirement<FMCCombatFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddRequirement<FMCEngagementFragment>(EMassFragmentAccess::ReadOnly);
 }
 
 void UMCDeathProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)

@@ -7,14 +7,14 @@
 
 bool FMCLookAtNearestEnemyTask::Link(FStateTreeLinker& Linker)
 {
-	Linker.LinkExternalData(CombatHandle);
+	Linker.LinkExternalData(OrientationHandle);
 	Linker.LinkExternalData(MassSignalSubsystemHandle);
 	return true;
 }
 
 void FMCLookAtNearestEnemyTask::GetDependencies(UE::MassBehavior::FStateTreeDependencyBuilder& Builder) const
 {
-	Builder.AddReadWrite<FMCCombatFragment>();
+	Builder.AddReadWrite<FMCOrientationFragment>();
 }
 
 void FMCLookAtNearestEnemyTask::ScheduleNextTick(FStateTreeExecutionContext& Context, float Delay) const
@@ -27,9 +27,9 @@ void FMCLookAtNearestEnemyTask::ScheduleNextTick(FStateTreeExecutionContext& Con
 
 EStateTreeRunStatus FMCLookAtNearestEnemyTask::EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
 {
-	FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
-	Combat.bLookAtNearestEnemy = true;
-	Combat.LookAtTurnRate = TurnRate;
+	FMCOrientationFragment& Orientation = Context.GetExternalData(OrientationHandle);
+	Orientation.bLookAtNearestEnemy = true;
+	Orientation.LookAtTurnRate = TurnRate;
 
 	ScheduleNextTick(Context, TickInterval);
 	return EStateTreeRunStatus::Running;
@@ -43,6 +43,6 @@ EStateTreeRunStatus FMCLookAtNearestEnemyTask::Tick(FStateTreeExecutionContext& 
 
 void FMCLookAtNearestEnemyTask::ExitState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
 {
-	FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
-	Combat.bLookAtNearestEnemy = false;
+	FMCOrientationFragment& Orientation = Context.GetExternalData(OrientationHandle);
+	Orientation.bLookAtNearestEnemy = false;
 }

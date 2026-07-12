@@ -30,7 +30,7 @@ void UMCTargetingProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager
 	GatherQuery.AddConstSharedRequirement<FMCUnitInfoFragment>();
 
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
-	EntityQuery.AddRequirement<FMCCombatFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FMCTargetingFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FMCEngagementFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddConstSharedRequirement<FMCUnitInfoFragment>();
 	EntityQuery.AddConstSharedRequirement<FMCTargetingParams>();
@@ -113,13 +113,13 @@ void UMCTargetingProcessor::GatherAttackers(FMassExecutionContext& Context)
 		const FMCTargetingParams& Params = Ctx.GetConstSharedFragment<FMCTargetingParams>();
 		const float PlayerRadiusSq = Params.PlayerTargetRadius * Params.PlayerTargetRadius;
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
-		const TArrayView<FMCCombatFragment> Combats = Ctx.GetMutableFragmentView<FMCCombatFragment>();
+		const TArrayView<FMCTargetingFragment> Targetings = Ctx.GetMutableFragmentView<FMCTargetingFragment>();
 		const TConstArrayView<FMCEngagementFragment> Engagements = Ctx.GetFragmentView<FMCEngagementFragment>();
 
 		const int32 Num = Ctx.GetNumEntities();
 		for (int32 i = 0; i < Num; ++i)
 		{
-			Attackers.Add({ &Combats[i], Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Ctx.GetEntity(i), Combats[i].CurrentTarget,
+			Attackers.Add({ &Targetings[i], Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Ctx.GetEntity(i), Targetings[i].CurrentTarget,
 				Engagements[i].LastAttackerUnit, Engagements[i].LastDamagedTime, Engagements[i].LastAttackTime, Params.bPreferPlayerTarget, PlayerRadiusSq });
 		}
 	});
@@ -197,9 +197,9 @@ void UMCTargetingProcessor::AssignPlayerTargets(int32 PlayerCandIdx)
 	for (int32 k = 0; k < Cap; ++k)
 	{
 		FMCAttacker& At = Attackers[Contenders[k]];
-		if (At.Combat->CurrentTarget != PlayerHandle)
+		if (At.Targeting->CurrentTarget != PlayerHandle)
 		{
-			At.Combat->SlotIndex = INDEX_NONE;
+			At.Targeting->SlotIndex = INDEX_NONE;
 		}
 		At.TargetIdx = PlayerCandIdx;
 		++AssignedCount[PlayerCandIdx];
@@ -215,8 +215,8 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 			continue;
 		}
 
-		FMCCombatFragment* Combat = At.Combat;
-		const FMassEntityHandle OldTarget = Combat->CurrentTarget;
+		FMCTargetingFragment* Targeting = At.Targeting;
+		const FMassEntityHandle OldTarget = Targeting->CurrentTarget;
 		const int32* OldFound = OldTarget.IsSet() ? HandleToCand.Find(OldTarget) : nullptr;
 		const bool bOldValid = OldFound && (Candidates[*OldFound].Faction != At.Faction) && !CandTargetsPlayer[*OldFound];
 
@@ -231,7 +231,7 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 		{
 			if (!bOldValid || *AtkFound != *OldFound)
 			{
-				Combat->SlotIndex = INDEX_NONE;
+				Targeting->SlotIndex = INDEX_NONE;
 			}
 			At.TargetIdx = *AtkFound;
 			++AssignedCount[*AtkFound];
@@ -246,10 +246,10 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 			continue;
 		}
 
-		if (!bOldValid || Now >= Combat->NextRetargetTime)
+		if (!bOldValid || Now >= Targeting->NextRetargetTime)
 		{
 			// Stagger next retarget by a per-entity offset (index mod 257) to spread retarget spikes across frames.
-			Combat->NextRetargetTime = Now + RetargetInterval + (At.EntityIndex % 257) / 257.f * RetargetInterval;
+			Targeting->NextRetargetTime = Now + RetargetInterval + (At.EntityIndex % 257) / 257.f * RetargetInterval;
 			continue;
 		}
 
@@ -299,14 +299,14 @@ void UMCTargetingProcessor::AssignOpenTargets()
 		const int32 Chosen = BestOpen;
 		if (Chosen != INDEX_NONE)
 		{
-			const FMassEntityHandle OldTarget = At.Combat->CurrentTarget;
+			const FMassEntityHandle OldTarget = At.Targeting->CurrentTarget;
 			const int32* OldFound = OldTarget.IsSet() ? HandleToCand.Find(OldTarget) : nullptr;
 
 			At.TargetIdx = Chosen;
 			++AssignedCount[Chosen];
 			if (!OldFound || *OldFound != Chosen)
 			{
-				At.Combat->SlotIndex = INDEX_NONE;
+				At.Targeting->SlotIndex = INDEX_NONE;
 			}
 		}
 	}
@@ -349,7 +349,7 @@ void UMCTargetingProcessor::AssignSlots()
 			});
 			for (int32 r = 0; r < Group.Num(); ++r)
 			{
-				Attackers[Group[r]].Combat->SlotIndex = r;
+				Attackers[Group[r]].Targeting->SlotIndex = r;
 			}
 		}
 		else
@@ -358,21 +358,21 @@ void UMCTargetingProcessor::AssignSlots()
 			uint32 Occupied = 0;
 			for (int32 a : Group)
 			{
-				FMCCombatFragment* Combat = Attackers[a].Combat;
-				if (Combat->SlotIndex >= 0 && Combat->SlotIndex < SlotCount && Combat->SlotIndex < 32 && !(Occupied & (1u << Combat->SlotIndex)))
+				FMCTargetingFragment* Targeting = Attackers[a].Targeting;
+				if (Targeting->SlotIndex >= 0 && Targeting->SlotIndex < SlotCount && Targeting->SlotIndex < 32 && !(Occupied & (1u << Targeting->SlotIndex)))
 				{
-					Occupied |= (1u << Combat->SlotIndex);
+					Occupied |= (1u << Targeting->SlotIndex);
 				}
 				else
 				{
-					Combat->SlotIndex = INDEX_NONE;
+					Targeting->SlotIndex = INDEX_NONE;
 				}
 			}
 
 			for (int32 a : Group)
 			{
-				FMCCombatFragment* Combat = Attackers[a].Combat;
-				if (Combat->SlotIndex != INDEX_NONE)
+				FMCTargetingFragment* Targeting = Attackers[a].Targeting;
+				if (Targeting->SlotIndex != INDEX_NONE)
 				{
 					continue;
 				}
@@ -395,12 +395,12 @@ void UMCTargetingProcessor::AssignSlots()
 
 				if (BestSlot != INDEX_NONE)
 				{
-					Combat->SlotIndex = BestSlot;
+					Targeting->SlotIndex = BestSlot;
 					Occupied |= (1u << BestSlot);
 				}
 				else
 				{
-					Combat->SlotIndex = 0;
+					Targeting->SlotIndex = 0;
 				}
 			}
 		}
@@ -418,11 +418,11 @@ void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
 
 	for (FMCAttacker& At : Attackers)
 	{
-		FMCCombatFragment* Combat = At.Combat;
+		FMCTargetingFragment* Targeting = At.Targeting;
 		if (At.TargetIdx != INDEX_NONE)
 		{
 			const FMCTargetCandidate& Cand = Candidates[At.TargetIdx];
-			const int32 SlotIndex = FMath::Max(0, Combat->SlotIndex);
+			const int32 SlotIndex = FMath::Max(0, Targeting->SlotIndex);
 			FVector SlotLocation = ComputeSlotLocation(Cand, SlotIndex);
 
 			bool bReverse = false;
@@ -446,7 +446,7 @@ void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
 					}
 					else if (bMeWasTargeting && bOppWasTargeting)
 					{
-						bReverse = Combat->bReverseSlot != 0;
+						bReverse = Targeting->bReverseSlot != 0;
 					}
 					else
 					{
@@ -457,26 +457,23 @@ void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
 					{
 						if (const int32* MeCandPtr = HandleToCand.Find(At.Handle))
 						{
-							const FVector AnchorOffset = ComputeSlotLocation(Candidates[*MeCandPtr], FMath::Max(0, Opp.Combat->SlotIndex)) - At.Location;
+							const FVector AnchorOffset = ComputeSlotLocation(Candidates[*MeCandPtr], FMath::Max(0, Opp.Targeting->SlotIndex)) - At.Location;
 							SlotLocation = Cand.Location - AnchorOffset;
 						}
 					}
 				}
 			}
-			Combat->bReverseSlot = bReverse;
+			Targeting->bReverseSlot = bReverse;
 
-			Combat->bHasTarget = true;
-			Combat->CurrentTarget = Cand.Handle;
-			Combat->TargetLocation = Cand.Location;
-			Combat->SlotLocation = SlotLocation;
-			Combat->DistanceToTarget = FVector::Dist(At.Location, Cand.Location);
-			Combat->DistanceToSlot = FVector::Dist(At.Location, SlotLocation);
-			Combat->bHasNearestEnemy = true;
-			Combat->bHasLoiterOffset = false;
-			Combat->NearestEnemyLocation = Cand.Location;
-			Combat->DistanceToNearestEnemy = Combat->DistanceToTarget;
-			Combat->LoiterLocation = Cand.Location;
-			Combat->DistanceToLoiter = Combat->DistanceToTarget;
+			Targeting->bHasTarget = true;
+			Targeting->CurrentTarget = Cand.Handle;
+			Targeting->TargetLocation = Cand.Location;
+			Targeting->SlotLocation = SlotLocation;
+			Targeting->DistanceToTarget = FVector::Dist(At.Location, Cand.Location);
+			Targeting->DistanceToSlot = FVector::Dist(At.Location, SlotLocation);
+			Targeting->bHasNearestEnemy = true;
+			Targeting->NearestEnemyLocation = Cand.Location;
+			Targeting->DistanceToNearestEnemy = Targeting->DistanceToTarget;
 
 			if (bDrawSlots && World)
 			{
@@ -490,14 +487,14 @@ void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
 		}
 		else
 		{
-			Combat->bHasTarget = false;
-			Combat->CurrentTarget = FMassEntityHandle();
-			Combat->SlotIndex = INDEX_NONE;
-			Combat->bReverseSlot = 0;
-			Combat->TargetLocation = FVector::ZeroVector;
-			Combat->SlotLocation = FVector::ZeroVector;
-			Combat->DistanceToTarget = TNumericLimits<float>::Max();
-			Combat->DistanceToSlot = TNumericLimits<float>::Max();
+			Targeting->bHasTarget = false;
+			Targeting->CurrentTarget = FMassEntityHandle();
+			Targeting->SlotIndex = INDEX_NONE;
+			Targeting->bReverseSlot = 0;
+			Targeting->TargetLocation = FVector::ZeroVector;
+			Targeting->SlotLocation = FVector::ZeroVector;
+			Targeting->DistanceToTarget = TNumericLimits<float>::Max();
+			Targeting->DistanceToSlot = TNumericLimits<float>::Max();
 
 			int32 BestEnemy = INDEX_NONE;
 			float BestEnemyDistSq = TNumericLimits<float>::Max();
@@ -519,28 +516,15 @@ void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
 			{
 				const FMCTargetCandidate& Enemy = Candidates[BestEnemy];
 
-				if (!Combat->bHasLoiterOffset)
-				{
-					const float Angle = FMath::FRandRange(0.f, 2.f * UE_PI);
-					const float Radius = FMath::FRandRange(Combat->LoiterMinRadius, Combat->LoiterMaxRadius);
-					Combat->LoiterOffset = FVector(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius, 0.f);
-					Combat->bHasLoiterOffset = true;
-				}
-
-				Combat->bHasNearestEnemy = true;
-				Combat->NearestEnemyLocation = Enemy.Location;
-				Combat->DistanceToNearestEnemy = FMath::Sqrt(BestEnemyDistSq);
-				Combat->LoiterLocation = Enemy.Location + Combat->LoiterOffset;
-				Combat->DistanceToLoiter = FVector::Dist(At.Location, Combat->LoiterLocation);
+				Targeting->bHasNearestEnemy = true;
+				Targeting->NearestEnemyLocation = Enemy.Location;
+				Targeting->DistanceToNearestEnemy = FMath::Sqrt(BestEnemyDistSq);
 			}
 			else
 			{
-				Combat->bHasNearestEnemy = false;
-				Combat->bHasLoiterOffset = false;
-				Combat->NearestEnemyLocation = FVector::ZeroVector;
-				Combat->DistanceToNearestEnemy = TNumericLimits<float>::Max();
-				Combat->LoiterLocation = FVector::ZeroVector;
-				Combat->DistanceToLoiter = TNumericLimits<float>::Max();
+				Targeting->bHasNearestEnemy = false;
+				Targeting->NearestEnemyLocation = FVector::ZeroVector;
+				Targeting->DistanceToNearestEnemy = TNumericLimits<float>::Max();
 			}
 		}
 	}

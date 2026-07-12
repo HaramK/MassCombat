@@ -5,7 +5,7 @@
 #include "MassEntityTypes.h"
 #include "MCTargetingProcessor.generated.h"
 
-struct FMCCombatFragment;
+struct FMCTargetingFragment;
 class UWorld;
 
 struct FMCTargetCandidate
@@ -21,7 +21,7 @@ struct FMCTargetCandidate
 
 struct FMCAttacker
 {
-	FMCCombatFragment* Combat;
+	FMCTargetingFragment* Targeting;
 	FVector Location;
 	uint8 Faction;
 	int32 EntityIndex;

@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "MassStateTreeTypes.h"
-#include "Combat/MCCombatFragments.h"
+#include "Targeting/MCTargetingFragments.h"
 #include "MCMoveToTargetTask.generated.h"
 
 namespace UE::MassBehavior
@@ -67,13 +67,11 @@ protected:
 	bool UpdateShortPath(FStateTreeExecutionContext& Context) const;
 	void ScheduleNextTick(FStateTreeExecutionContext& Context, float Delay) const;
 
-	virtual bool HasGoal(const FMCCombatFragment& Combat) const;
-	virtual FVector GetGoalLocation(const FMCCombatFragment& Combat) const;
-	virtual float GetGoalDistance(const FMCCombatFragment& Combat) const;
-	virtual bool IsGoalReached(const FMCCombatFragment& Combat, float AcceptanceRadius) const;
+	virtual bool HasGoal(const FMCTargetingFragment& Targeting) const;
+	virtual FVector GetGoalLocation(FStateTreeExecutionContext& Context, const FMCTargetingFragment& Targeting) const;
 	virtual FColor GetDebugColor() const;
 
-	TStateTreeExternalDataHandle<FMCCombatFragment> CombatHandle;
+	TStateTreeExternalDataHandle<FMCTargetingFragment> TargetingHandle;
 	TStateTreeExternalDataHandle<FTransformFragment> TransformHandle;
 	TStateTreeExternalDataHandle<FMassMoveTargetFragment> MoveTargetHandle;
 	TStateTreeExternalDataHandle<FAgentRadiusFragment> AgentRadiusHandle;
