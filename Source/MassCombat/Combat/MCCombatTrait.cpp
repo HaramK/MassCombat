@@ -12,6 +12,7 @@ void UMCCombatTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext
 	BuildContext.RequireFragment<FMassVelocityFragment>();
 
 	BuildContext.AddFragment<FMCCombatFragment>();
+	BuildContext.AddFragment<FMCEngagementFragment>();
 	BuildContext.AddFragment<FMCAnimStateFragment>();
 
 	FMassEntityManager& EntityManager = UE::Mass::Utils::GetEntityManagerChecked(World);

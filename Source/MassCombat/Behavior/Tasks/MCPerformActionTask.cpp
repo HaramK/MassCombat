@@ -14,7 +14,7 @@
 
 namespace
 {
-	FMCActionStepContext MakeStepContext(UWorld* World, FMassEntityHandle SelfEntity, FMassEntityHandle LockedTarget, FMCAnimStateFragment* Anim, FMCCombatFragment* Combat, float Now)
+	FMCActionStepContext MakeStepContext(UWorld* World, FMassEntityHandle SelfEntity, FMassEntityHandle LockedTarget, FMCAnimStateFragment* Anim, FMCCombatFragment* Combat, FMCEngagementFragment* Engagement, float Now)
 	{
 		FMCActionStepContext Ctx;
 		Ctx.World = World;
@@ -23,6 +23,7 @@ namespace
 		Ctx.LockedTarget = LockedTarget;
 		Ctx.Anim = Anim;
 		Ctx.Combat = Combat;
+		Ctx.Engagement = Engagement;
 		Ctx.Now = Now;
 		return Ctx;
 	}
@@ -108,6 +109,7 @@ bool FMCPerformActionTask::Link(FStateTreeLinker& Linker)
 	Linker.LinkExternalData(ActionSetHandle);
 	Linker.LinkExternalData(AnimHandle);
 	Linker.LinkExternalData(CombatHandle);
+	Linker.LinkExternalData(EngagementHandle);
 	Linker.LinkExternalData(MassSignalSubsystemHandle);
 	return true;
 }
@@ -117,6 +119,7 @@ void FMCPerformActionTask::GetDependencies(UE::MassBehavior::FStateTreeDependenc
 	Builder.AddReadWrite<FMCActionFragment>();
 	Builder.AddReadWrite<FMCAnimStateFragment>();
 	Builder.AddReadWrite<FMCCombatFragment>();
+	Builder.AddReadWrite<FMCEngagementFragment>();
 }
 
 void FMCPerformActionTask::ScheduleNextTick(FStateTreeExecutionContext& Context, float Delay) const
@@ -134,6 +137,7 @@ EStateTreeRunStatus FMCPerformActionTask::EnterState(FStateTreeExecutionContext&
 	const FMCActionSetParams& Set = Context.GetExternalData(ActionSetHandle);
 	FMCAnimStateFragment& Anim = Context.GetExternalData(AnimHandle);
 	FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
+	FMCEngagementFragment& Engagement = Context.GetExternalData(EngagementHandle);
 	const UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
 
 	UWorld* World = SignalSubsystem.GetWorld();
@@ -160,7 +164,7 @@ EStateTreeRunStatus FMCPerformActionTask::EnterState(FStateTreeExecutionContext&
 
 	Data.LockedTarget = Combat.CurrentTarget;
 
-	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, Now);
+	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, &Engagement, Now);
 
 	Data.Cursors.SetNum(Def->Tracks.Num());
 	for (int32 t = 0; t < Def->Tracks.Num(); ++t)
@@ -185,6 +189,7 @@ EStateTreeRunStatus FMCPerformActionTask::Tick(FStateTreeExecutionContext& Conte
 	const FMCActionSetParams& Set = Context.GetExternalData(ActionSetHandle);
 	FMCAnimStateFragment& Anim = Context.GetExternalData(AnimHandle);
 	FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
+	FMCEngagementFragment& Engagement = Context.GetExternalData(EngagementHandle);
 	const UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
 
 	UWorld* World = SignalSubsystem.GetWorld();
@@ -197,7 +202,7 @@ EStateTreeRunStatus FMCPerformActionTask::Tick(FStateTreeExecutionContext& Conte
 		return EStateTreeRunStatus::Failed;
 	}
 
-	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, Now);
+	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, &Engagement, Now);
 
 	const int32 Count = FMath::Min(Data.Cursors.Num(), Def->Tracks.Num());
 	for (int32 t = 0; t < Count; ++t)
@@ -222,6 +227,7 @@ void FMCPerformActionTask::ExitState(FStateTreeExecutionContext& Context, const 
 	const FMCActionSetParams& Set = Context.GetExternalData(ActionSetHandle);
 	FMCAnimStateFragment& Anim = Context.GetExternalData(AnimHandle);
 	FMCCombatFragment& Combat = Context.GetExternalData(CombatHandle);
+	FMCEngagementFragment& Engagement = Context.GetExternalData(EngagementHandle);
 	const UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
 
 	UWorld* World = SignalSubsystem.GetWorld();
@@ -242,7 +248,7 @@ void FMCPerformActionTask::ExitState(FStateTreeExecutionContext& Context, const 
 
 	if (Def)
 	{
-		const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, Now);
+		const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, &Engagement, Now);
 		const int32 Count = FMath::Min(Data.Cursors.Num(), Def->Tracks.Num());
 		for (int32 t = 0; t < Count; ++t)
 		{

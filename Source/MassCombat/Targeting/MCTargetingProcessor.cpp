@@ -31,6 +31,7 @@ void UMCTargetingProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager
 
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddRequirement<FMCCombatFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FMCEngagementFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddConstSharedRequirement<FMCUnitInfoFragment>();
 	EntityQuery.AddConstSharedRequirement<FMCTargetingParams>();
 }
@@ -113,11 +114,13 @@ void UMCTargetingProcessor::GatherAttackers(FMassExecutionContext& Context)
 		const float PlayerRadiusSq = Params.PlayerTargetRadius * Params.PlayerTargetRadius;
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
 		const TArrayView<FMCCombatFragment> Combats = Ctx.GetMutableFragmentView<FMCCombatFragment>();
+		const TConstArrayView<FMCEngagementFragment> Engagements = Ctx.GetFragmentView<FMCEngagementFragment>();
 
 		const int32 Num = Ctx.GetNumEntities();
 		for (int32 i = 0; i < Num; ++i)
 		{
-			Attackers.Add({ &Combats[i], Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Ctx.GetEntity(i), Combats[i].CurrentTarget, Params.bPreferPlayerTarget, PlayerRadiusSq });
+			Attackers.Add({ &Combats[i], Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Ctx.GetEntity(i), Combats[i].CurrentTarget,
+				Engagements[i].LastAttackerUnit, Engagements[i].LastDamagedTime, Engagements[i].LastAttackTime, Params.bPreferPlayerTarget, PlayerRadiusSq });
 		}
 	});
 }
@@ -217,11 +220,11 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 		const int32* OldFound = OldTarget.IsSet() ? HandleToCand.Find(OldTarget) : nullptr;
 		const bool bOldValid = OldFound && (Candidates[*OldFound].Faction != At.Faction) && !CandTargetsPlayer[*OldFound];
 
-		const FMassEntityHandle Attacker = Combat->LastAttackerUnit;
+		const FMassEntityHandle Attacker = At.LastAttackerUnit;
 		const int32* AtkFound = (Attacker.IsSet() && Attacker != OldTarget) ? HandleToCand.Find(Attacker) : nullptr;
 		const bool bRetaliate = AtkFound && (Candidates[*AtkFound].Faction != At.Faction)
 			&& !CandTargetsPlayer[*AtkFound]
-			&& ((Now - Combat->LastDamagedTime) < CombatWindow)
+			&& ((Now - At.LastDamagedTime) < CombatWindow)
 			&& (AssignedCount[*AtkFound] < Candidates[*AtkFound].MaxAttackers);
 
 		if (bRetaliate)
@@ -235,7 +238,7 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 			continue;
 		}
 
-		const bool bRealCombat = bOldValid && (((Now - Combat->LastAttackTime) < CombatWindow) || ((Now - Combat->LastDamagedTime) < CombatWindow));
+		const bool bRealCombat = bOldValid && (((Now - At.LastAttackTime) < CombatWindow) || ((Now - At.LastDamagedTime) < CombatWindow));
 		if (bRealCombat && AssignedCount[*OldFound] < Candidates[*OldFound].MaxAttackers)
 		{
 			At.TargetIdx = *OldFound;

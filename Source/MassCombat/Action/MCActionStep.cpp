@@ -55,12 +55,12 @@ void FMCActionStep_RotateToTarget::OnEnd(const FMCActionStepContext& Ctx) const
 
 void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
 {
-	if (!Ctx.EntityManager || !Ctx.Combat)
+	if (!Ctx.EntityManager || !Ctx.Engagement)
 	{
 		return;
 	}
 
-	Ctx.Combat->LastAttackTime = Ctx.Now;
+	Ctx.Engagement->LastAttackTime = Ctx.Now;
 
 	const FMassEntityHandle Target = Ctx.LockedTarget;
 	if (!Ctx.EntityManager->IsEntityValid(Target))
@@ -75,17 +75,17 @@ void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
 	}
 	TargetUnit->Health -= Damage;
 
-	if (FMCCombatFragment* TargetCombat = Ctx.EntityManager->GetFragmentDataPtr<FMCCombatFragment>(Target))
+	if (FMCEngagementFragment* TargetEngagement = Ctx.EntityManager->GetFragmentDataPtr<FMCEngagementFragment>(Target))
 	{
-		TargetCombat->LastAttackerUnit = Ctx.SelfEntity;
-		TargetCombat->LastDamagedTime = Ctx.Now;
+		TargetEngagement->LastAttackerUnit = Ctx.SelfEntity;
+		TargetEngagement->LastDamagedTime = Ctx.Now;
 	}
 }
 
 void FMCActionStep_MarkHitReacted::OnStart(const FMCActionStepContext& Ctx) const
 {
-	if (Ctx.Combat)
+	if (Ctx.Engagement)
 	{
-		Ctx.Combat->LastHitReactTime = Ctx.Now;
+		Ctx.Engagement->LastHitReactTime = Ctx.Now;
 	}
 }

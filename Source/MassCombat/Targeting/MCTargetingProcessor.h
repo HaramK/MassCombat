@@ -28,6 +28,9 @@ struct FMCAttacker
 	int32 TargetIdx;
 	FMassEntityHandle Handle;
 	FMassEntityHandle PrevTarget;
+	FMassEntityHandle LastAttackerUnit;
+	float LastDamagedTime;
+	float LastAttackTime;
 	bool bPreferPlayer;
 	float PlayerRadiusSq;
 };

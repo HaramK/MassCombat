@@ -9,6 +9,7 @@ class UAnimMontage;
 struct FMassEntityManager;
 struct FMCAnimStateFragment;
 struct FMCCombatFragment;
+struct FMCEngagementFragment;
 
 struct FMCActionStepContext
 {
@@ -16,6 +17,7 @@ struct FMCActionStepContext
 	FMassEntityManager* EntityManager = nullptr;
 	FMCAnimStateFragment* Anim = nullptr;
 	FMCCombatFragment* Combat = nullptr;
+	FMCEngagementFragment* Engagement = nullptr;
 	FMassEntityHandle SelfEntity;
 	FMassEntityHandle LockedTarget;
 	float Now = 0.f;

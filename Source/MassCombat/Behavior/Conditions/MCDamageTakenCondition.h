@@ -25,5 +25,5 @@ struct FMCDamageTakenCondition : public FStateTreeConditionCommonBase
 	virtual const UStruct* GetInstanceDataType() const override { return FInstanceDataType::StaticStruct(); }
 	virtual bool TestCondition(FStateTreeExecutionContext& Context) const override;
 
-	TStateTreeExternalDataHandle<FMCCombatFragment> CombatHandle;
+	TStateTreeExternalDataHandle<FMCEngagementFragment> EngagementHandle;
 };

@@ -56,7 +56,7 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 	struct FHitCandidate
 	{
 		FMCUnitFragment* Unit;
-		FMCCombatFragment* Combat;
+		FMCEngagementFragment* Engagement;
 		FVector Location;
 		uint8 Faction;
 	};
@@ -95,7 +95,7 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 	FMassEntityQuery Query(EntityManager.AsShared());
 	Query.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
 	Query.AddRequirement<FMCUnitFragment>(EMassFragmentAccess::ReadWrite);
-	Query.AddRequirement<FMCCombatFragment>(EMassFragmentAccess::ReadWrite);
+	Query.AddRequirement<FMCEngagementFragment>(EMassFragmentAccess::ReadWrite);
 	Query.AddConstSharedRequirement<FMCUnitInfoFragment>();
 
 	FMassExecutionContext Context(EntityManager);
@@ -104,7 +104,7 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 		const uint8 Faction = Ctx.GetConstSharedFragment<FMCUnitInfoFragment>().Faction;
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
 		const TArrayView<FMCUnitFragment> Units = Ctx.GetMutableFragmentView<FMCUnitFragment>();
-		const TArrayView<FMCCombatFragment> Combats = Ctx.GetMutableFragmentView<FMCCombatFragment>();
+		const TArrayView<FMCEngagementFragment> Engagements = Ctx.GetMutableFragmentView<FMCEngagementFragment>();
 
 		const int32 Num = Ctx.GetNumEntities();
 		for (int32 i = 0; i < Num; ++i)
@@ -117,7 +117,7 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 			{
 				continue;
 			}
-			Candidates.Add({ &Units[i], &Combats[i], Transforms[i].GetTransform().GetLocation(), Faction });
+			Candidates.Add({ &Units[i], &Engagements[i], Transforms[i].GetTransform().GetLocation(), Faction });
 		}
 	});
 
@@ -157,8 +157,8 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 		}
 
 		Cand.Unit->Health -= Damage;
-		Cand.Combat->LastAttackerUnit = PlayerEntity;
-		Cand.Combat->LastDamagedTime = Now;
+		Cand.Engagement->LastAttackerUnit = PlayerEntity;
+		Cand.Engagement->LastDamagedTime = Now;
 		++HitCount;
 
 		if (bDraw)
