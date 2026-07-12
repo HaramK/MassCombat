@@ -52,7 +52,7 @@ protected:
 	void AssignReturningTargets(float Now, float CombatWindow, float RetargetInterval);
 	void AssignOpenTargets();
 	void AssignSlots();
-	void WriteResults(UWorld* World, float DeltaTime, bool bDrawSlots);
+	void WriteResults(UWorld* World, bool bDrawSlots);
 
 	FMassEntityQuery GatherQuery;
 	FMassEntityQuery EntityQuery;

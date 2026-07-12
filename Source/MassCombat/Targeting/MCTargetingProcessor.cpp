@@ -49,7 +49,6 @@ namespace
 void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
 	UWorld* World = EntityManager.GetWorld();
-	const float DeltaTime = World ? World->GetDeltaSeconds() : 0.f;
 	const float Now = World ? World->GetTimeSeconds() : 0.f;
 	const bool bDrawSlots = CVarDrawTargetSlots.GetValueOnGameThread();
 
@@ -70,7 +69,7 @@ void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 	AssignReturningTargets(Now, CombatWindow, RetargetInterval);
 	AssignOpenTargets();
 	AssignSlots();
-	WriteResults(World, DeltaTime, bDrawSlots);
+	WriteResults(World, bDrawSlots);
 }
 
 void UMCTargetingProcessor::GatherCandidates(FMassExecutionContext& Context)
@@ -404,7 +403,7 @@ void UMCTargetingProcessor::AssignSlots()
 	}
 }
 
-void UMCTargetingProcessor::WriteResults(UWorld* World, float DeltaTime, bool bDrawSlots)
+void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
 {
 	AttackerByHandle.Reset();
 	AttackerByHandle.Reserve(Attackers.Num());
@@ -540,7 +539,5 @@ void UMCTargetingProcessor::WriteResults(UWorld* World, float DeltaTime, bool bD
 				Combat->DistanceToLoiter = TNumericLimits<float>::Max();
 			}
 		}
-
-		Combat->AttackCooldownRemaining = FMath::Max(0.f, Combat->AttackCooldownRemaining - DeltaTime);
 	}
 }

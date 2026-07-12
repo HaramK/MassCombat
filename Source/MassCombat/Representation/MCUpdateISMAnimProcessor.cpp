@@ -76,7 +76,9 @@ void UMCUpdateISMAnimProcessor::Execute(FMassEntityManager& EntityManager, FMass
 						}
 
 						FrameData.Frame     = CurrentFrame;
-						FrameData.PrevFrame = FMath::Clamp(CurrentFrame - 1.f, Range.StartFrame, Range.EndFrame);
+						FrameData.PrevFrame = NumFrames > 0.f
+							? Range.StartFrame + FMath::Fmod(CurrentFrame - Range.StartFrame - 1.f + NumFrames, NumFrames)
+							: CurrentFrame;
 					}
 
 					{

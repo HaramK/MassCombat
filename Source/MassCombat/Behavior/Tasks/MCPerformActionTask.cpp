@@ -13,12 +13,13 @@
 
 namespace
 {
-	FMCActionStepContext MakeStepContext(UWorld* World, FMassEntityHandle SelfEntity, FMCAnimStateFragment* Anim, FMCCombatFragment* Combat, float Now)
+	FMCActionStepContext MakeStepContext(UWorld* World, FMassEntityHandle SelfEntity, FMassEntityHandle LockedTarget, FMCAnimStateFragment* Anim, FMCCombatFragment* Combat, float Now)
 	{
 		FMCActionStepContext Ctx;
 		Ctx.World = World;
 		Ctx.EntityManager = World ? &UE::Mass::Utils::GetEntityManagerChecked(*World) : nullptr;
 		Ctx.SelfEntity = SelfEntity;
+		Ctx.LockedTarget = LockedTarget;
 		Ctx.Anim = Anim;
 		Ctx.Combat = Combat;
 		Ctx.Now = Now;
@@ -156,7 +157,9 @@ EStateTreeRunStatus FMCPerformActionTask::EnterState(FStateTreeExecutionContext&
 		Combat.bMovementBlocked = true;
 	}
 
-	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, &Anim, &Combat, Now);
+	Data.LockedTarget = Combat.CurrentTarget;
+
+	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, Now);
 
 	Data.Cursors.SetNum(Def->Tracks.Num());
 	for (int32 t = 0; t < Def->Tracks.Num(); ++t)
@@ -193,7 +196,7 @@ EStateTreeRunStatus FMCPerformActionTask::Tick(FStateTreeExecutionContext& Conte
 		return EStateTreeRunStatus::Failed;
 	}
 
-	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, &Anim, &Combat, Now);
+	const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, Now);
 
 	const int32 Count = FMath::Min(Data.Cursors.Num(), Def->Tracks.Num());
 	for (int32 t = 0; t < Count; ++t)
@@ -238,7 +241,7 @@ void FMCPerformActionTask::ExitState(FStateTreeExecutionContext& Context, const 
 
 	if (Def)
 	{
-		const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, &Anim, &Combat, Now);
+		const FMCActionStepContext Ctx = MakeStepContext(World, SelfEntity, Data.LockedTarget, &Anim, &Combat, Now);
 		const int32 Count = FMath::Min(Data.Cursors.Num(), Def->Tracks.Num());
 		for (int32 t = 0; t < Count; ++t)
 		{

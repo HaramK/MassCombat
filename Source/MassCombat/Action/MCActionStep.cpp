@@ -21,7 +21,7 @@ void FMCActionStep_PlayMontage::OnStart(const FMCActionStepContext& Ctx) const
 
 void FMCActionStep_PlayMontage::OnEnd(const FMCActionStepContext& Ctx) const
 {
-	if (Ctx.Anim)
+	if (Ctx.Anim && Ctx.Anim->ActiveMontage.Get() == Montage.Get())
 	{
 		Ctx.Anim->ActiveMontage = nullptr;
 		Ctx.Anim->ActiveMontageStateIndex = INDEX_NONE;
@@ -61,16 +61,18 @@ void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
 
 	Ctx.Combat->LastAttackTime = Ctx.Now;
 
-	const FMassEntityHandle Target = Ctx.Combat->CurrentTarget;
+	const FMassEntityHandle Target = Ctx.LockedTarget;
 	if (!Ctx.EntityManager->IsEntityValid(Target))
 	{
 		return;
 	}
 
-	if (FMCUnitFragment* TargetUnit = Ctx.EntityManager->GetFragmentDataPtr<FMCUnitFragment>(Target))
+	FMCUnitFragment* TargetUnit = Ctx.EntityManager->GetFragmentDataPtr<FMCUnitFragment>(Target);
+	if (!TargetUnit || TargetUnit->Health <= 0.f)
 	{
-		TargetUnit->Health -= Damage;
+		return;
 	}
+	TargetUnit->Health -= Damage;
 
 	if (FMCCombatFragment* TargetCombat = Ctx.EntityManager->GetFragmentDataPtr<FMCCombatFragment>(Target))
 	{

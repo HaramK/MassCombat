@@ -17,6 +17,7 @@ struct FMCActionStepContext
 	FMCAnimStateFragment* Anim = nullptr;
 	FMCCombatFragment* Combat = nullptr;
 	FMassEntityHandle SelfEntity;
+	FMassEntityHandle LockedTarget;
 	float Now = 0.f;
 };
 

@@ -48,8 +48,6 @@ struct FMCCombatFragment : public FMassFragment
 
 	float NextRetargetTime = 0.f;
 
-	float AttackCooldownRemaining = 0.f;
-
 	float FaceTargetEndTime = 0.f;
 
 	FMassEntityHandle CurrentTarget;
@@ -125,14 +123,5 @@ struct FMCCombatParams : public FMassConstSharedFragment
 	int32 WalkStateIndex = 1;
 
 	UPROPERTY(EditAnywhere, Category = "Anim")
-	int32 AttackStateIndex = 2;
-
-	UPROPERTY(EditAnywhere, Category = "Anim")
 	TObjectPtr<UAnimToTextureDataAsset> DefaultAnimData;
-
-	UPROPERTY(EditAnywhere, Category = "Combat")
-	TObjectPtr<UAnimMontage> AttackMontage;
-
-	UPROPERTY(EditAnywhere, Category = "Combat")
-	float AttackDurationFallback = 1.0f;
 };

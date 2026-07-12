@@ -4,8 +4,6 @@
 #include "GameFramework/Character.h"
 #include "MCNpcCharacter.generated.h"
 
-class UAnimMontage;
-
 UCLASS()
 class MASSCOMBAT_API AMCNpcCharacter : public ACharacter
 {
@@ -13,10 +11,4 @@ class MASSCOMBAT_API AMCNpcCharacter : public ACharacter
 
 public:
 	AMCNpcCharacter();
-
-	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void PlayAttackMontage();
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
-	TObjectPtr<UAnimMontage> AttackMontage;
 };
