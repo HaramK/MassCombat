@@ -71,7 +71,7 @@ void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 	AssignReturningTargets(Now, CombatWindow, RetargetInterval);
 	AssignOpenTargets();
 	AssignSlots();
-	WriteResults(World, bDrawSlots);
+	WriteResults(Context, World, bDrawSlots);
 }
 
 void UMCTargetingProcessor::GatherCandidates(FMassExecutionContext& Context)
@@ -113,13 +113,14 @@ void UMCTargetingProcessor::GatherAttackers(FMassExecutionContext& Context)
 		const FMCTargetingParams& Params = Ctx.GetConstSharedFragment<FMCTargetingParams>();
 		const float PlayerRadiusSq = Params.PlayerTargetRadius * Params.PlayerTargetRadius;
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
-		const TArrayView<FMCTargetingFragment> Targetings = Ctx.GetMutableFragmentView<FMCTargetingFragment>();
+		const TConstArrayView<FMCTargetingFragment> Targetings = Ctx.GetFragmentView<FMCTargetingFragment>();
 		const TConstArrayView<FMCEngagementFragment> Engagements = Ctx.GetFragmentView<FMCEngagementFragment>();
 
 		const int32 Num = Ctx.GetNumEntities();
 		for (int32 i = 0; i < Num; ++i)
 		{
-			Attackers.Add({ &Targetings[i], Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Ctx.GetEntity(i), Targetings[i].CurrentTarget,
+			Attackers.Add({ Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Targetings[i].SlotIndex, Targetings[i].NextRetargetTime,
+				Ctx.GetEntity(i), Targetings[i].CurrentTarget,
 				Engagements[i].LastAttackerUnit, Engagements[i].LastDamagedTime, Engagements[i].LastAttackTime, Params.bPreferPlayerTarget, PlayerRadiusSq });
 		}
 	});
@@ -197,9 +198,9 @@ void UMCTargetingProcessor::AssignPlayerTargets(int32 PlayerCandIdx)
 	for (int32 k = 0; k < Cap; ++k)
 	{
 		FMCAttacker& At = Attackers[Contenders[k]];
-		if (At.Targeting->CurrentTarget != PlayerHandle)
+		if (At.PrevTarget != PlayerHandle)
 		{
-			At.Targeting->SlotIndex = INDEX_NONE;
+			At.SlotIndex = INDEX_NONE;
 		}
 		At.TargetIdx = PlayerCandIdx;
 		++AssignedCount[PlayerCandIdx];
@@ -215,8 +216,7 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 			continue;
 		}
 
-		FMCTargetingFragment* Targeting = At.Targeting;
-		const FMassEntityHandle OldTarget = Targeting->CurrentTarget;
+		const FMassEntityHandle OldTarget = At.PrevTarget;
 		const int32* OldFound = OldTarget.IsSet() ? HandleToCand.Find(OldTarget) : nullptr;
 		const bool bOldValid = OldFound && (Candidates[*OldFound].Faction != At.Faction) && !CandTargetsPlayer[*OldFound];
 
@@ -231,7 +231,7 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 		{
 			if (!bOldValid || *AtkFound != *OldFound)
 			{
-				Targeting->SlotIndex = INDEX_NONE;
+				At.SlotIndex = INDEX_NONE;
 			}
 			At.TargetIdx = *AtkFound;
 			++AssignedCount[*AtkFound];
@@ -246,10 +246,9 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 			continue;
 		}
 
-		if (!bOldValid || Now >= Targeting->NextRetargetTime)
+		if (!bOldValid || Now >= At.NextRetargetTime)
 		{
-			// Stagger next retarget by a per-entity offset (index mod 257) to spread retarget spikes across frames.
-			Targeting->NextRetargetTime = Now + RetargetInterval + (At.EntityIndex % 257) / 257.f * RetargetInterval;
+			At.NextRetargetTime = Now + RetargetInterval + FMath::FRandRange(0.f, RetargetInterval);
 			continue;
 		}
 
@@ -299,14 +298,14 @@ void UMCTargetingProcessor::AssignOpenTargets()
 		const int32 Chosen = BestOpen;
 		if (Chosen != INDEX_NONE)
 		{
-			const FMassEntityHandle OldTarget = At.Targeting->CurrentTarget;
+			const FMassEntityHandle OldTarget = At.PrevTarget;
 			const int32* OldFound = OldTarget.IsSet() ? HandleToCand.Find(OldTarget) : nullptr;
 
 			At.TargetIdx = Chosen;
 			++AssignedCount[Chosen];
 			if (!OldFound || *OldFound != Chosen)
 			{
-				At.Targeting->SlotIndex = INDEX_NONE;
+				At.SlotIndex = INDEX_NONE;
 			}
 		}
 	}
@@ -349,39 +348,40 @@ void UMCTargetingProcessor::AssignSlots()
 			});
 			for (int32 r = 0; r < Group.Num(); ++r)
 			{
-				Attackers[Group[r]].Targeting->SlotIndex = r;
+				Attackers[Group[r]].SlotIndex = r;
 			}
 		}
 		else
 		{
-			// Bitmask of occupied slots (supports up to 32 attackers per target): keep valid existing slots, fill the rest.
-			uint32 Occupied = 0;
+			SlotOccupied.Reset();
+			SlotOccupied.SetNumZeroed(SlotCount);
+
 			for (int32 a : Group)
 			{
-				FMCTargetingFragment* Targeting = Attackers[a].Targeting;
-				if (Targeting->SlotIndex >= 0 && Targeting->SlotIndex < SlotCount && Targeting->SlotIndex < 32 && !(Occupied & (1u << Targeting->SlotIndex)))
+				int32& Slot = Attackers[a].SlotIndex;
+				if (Slot >= 0 && Slot < SlotCount && !SlotOccupied[Slot])
 				{
-					Occupied |= (1u << Targeting->SlotIndex);
+					SlotOccupied[Slot] = true;
 				}
 				else
 				{
-					Targeting->SlotIndex = INDEX_NONE;
+					Slot = INDEX_NONE;
 				}
 			}
 
 			for (int32 a : Group)
 			{
-				FMCTargetingFragment* Targeting = Attackers[a].Targeting;
-				if (Targeting->SlotIndex != INDEX_NONE)
+				int32& Slot = Attackers[a].SlotIndex;
+				if (Slot != INDEX_NONE)
 				{
 					continue;
 				}
 
 				int32 BestSlot = INDEX_NONE;
 				float BestSlotDistSq = TNumericLimits<float>::Max();
-				for (int32 k = 0; k < SlotCount && k < 32; ++k)
+				for (int32 k = 0; k < SlotCount; ++k)
 				{
-					if (Occupied & (1u << k))
+					if (SlotOccupied[k])
 					{
 						continue;
 					}
@@ -395,12 +395,12 @@ void UMCTargetingProcessor::AssignSlots()
 
 				if (BestSlot != INDEX_NONE)
 				{
-					Targeting->SlotIndex = BestSlot;
-					Occupied |= (1u << BestSlot);
+					Slot = BestSlot;
+					SlotOccupied[BestSlot] = true;
 				}
 				else
 				{
-					Targeting->SlotIndex = 0;
+					Slot = 0;
 				}
 			}
 		}
@@ -472,7 +472,7 @@ void UMCTargetingProcessor::DetectMutualCycles()
 	}
 }
 
-void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
+void UMCTargetingProcessor::WriteResults(FMassExecutionContext& Context, UWorld* World, bool bDrawSlots)
 {
 	AttackerByHandle.Reset();
 	AttackerByHandle.Reserve(Attackers.Num());
@@ -483,76 +483,84 @@ void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
 
 	DetectMutualCycles();
 
-	for (int32 a = 0; a < Attackers.Num(); ++a)
+	int32 a = 0;
+	EntityQuery.ForEachEntityChunk(Context, [this, World, bDrawSlots, &a](FMassExecutionContext& Ctx)
 	{
-		FMCAttacker& At = Attackers[a];
-		FMCTargetingFragment* Targeting = At.Targeting;
-		if (At.TargetIdx != INDEX_NONE)
+		const TArrayView<FMCTargetingFragment> Targetings = Ctx.GetMutableFragmentView<FMCTargetingFragment>();
+
+		const int32 Num = Ctx.GetNumEntities();
+		for (int32 i = 0; i < Num; ++i, ++a)
 		{
-			const FMCTargetCandidate& Cand = Candidates[At.TargetIdx];
-			const int32 SlotIndex = FMath::Max(0, Targeting->SlotIndex);
-			FVector SlotLocation = InCycle[a] ? Cand.Location : ComputeSlotLocation(Cand, SlotIndex);
+			const FMCAttacker& At = Attackers[a];
+			FMCTargetingFragment& Targeting = Targetings[i];
 
-			Targeting->bHasTarget = true;
-			Targeting->CurrentTarget = Cand.Handle;
-			Targeting->TargetLocation = Cand.Location;
-			Targeting->SlotLocation = SlotLocation;
-			Targeting->DistanceToTarget = FVector::Dist(At.Location, Cand.Location);
-			Targeting->DistanceToSlot = FVector::Dist(At.Location, SlotLocation);
-			Targeting->bHasNearestEnemy = true;
-			Targeting->NearestEnemyLocation = Cand.Location;
-			Targeting->DistanceToNearestEnemy = Targeting->DistanceToTarget;
+			Targeting.NextRetargetTime = At.NextRetargetTime;
 
-			if (bDrawSlots && World)
+			if (At.TargetIdx != INDEX_NONE)
 			{
-				const float DrawZ = At.Location.Z;
-				const FVector SlotDraw(SlotLocation.X, SlotLocation.Y, DrawZ);
-				const FVector TargetDraw(Cand.Location.X, Cand.Location.Y, DrawZ);
-				DrawDebugSphere(World, SlotDraw, 20.f, 8, FColor::Green, false, -1.f, 0, 1.f);
-				DrawDebugLine(World, At.Location, SlotDraw, FColor::Yellow, false, -1.f, 0, 1.f);
-				DrawDebugLine(World, SlotDraw, TargetDraw, FColor::Red, false, -1.f, 0, 0.5f);
-			}
-		}
-		else
-		{
-			Targeting->bHasTarget = false;
-			Targeting->CurrentTarget = FMassEntityHandle();
-			Targeting->SlotIndex = INDEX_NONE;
-			Targeting->TargetLocation = FVector::ZeroVector;
-			Targeting->SlotLocation = FVector::ZeroVector;
-			Targeting->DistanceToTarget = TNumericLimits<float>::Max();
-			Targeting->DistanceToSlot = TNumericLimits<float>::Max();
+				const FMCTargetCandidate& Cand = Candidates[At.TargetIdx];
+				Targeting.SlotIndex = At.SlotIndex;
+				const FVector SlotLocation = InCycle[a] ? Cand.Location : ComputeSlotLocation(Cand, FMath::Max(0, At.SlotIndex));
 
-			int32 BestEnemy = INDEX_NONE;
-			float BestEnemyDistSq = TNumericLimits<float>::Max();
-			for (int32 c = 0; c < Candidates.Num(); ++c)
-			{
-				if (Candidates[c].Faction == At.Faction)
+				Targeting.bHasTarget = true;
+				Targeting.CurrentTarget = Cand.Handle;
+				Targeting.TargetLocation = Cand.Location;
+				Targeting.SlotLocation = SlotLocation;
+				Targeting.DistanceToTarget = FVector::Dist(At.Location, Cand.Location);
+				Targeting.DistanceToSlot = FVector::Dist(At.Location, SlotLocation);
+				Targeting.bHasNearestEnemy = true;
+				Targeting.NearestEnemyLocation = Cand.Location;
+				Targeting.DistanceToNearestEnemy = Targeting.DistanceToTarget;
+
+				if (bDrawSlots && World)
 				{
-					continue;
+					const float DrawZ = At.Location.Z;
+					const FVector SlotDraw(SlotLocation.X, SlotLocation.Y, DrawZ);
+					const FVector TargetDraw(Cand.Location.X, Cand.Location.Y, DrawZ);
+					DrawDebugSphere(World, SlotDraw, 20.f, 8, FColor::Green, false, -1.f, 0, 1.f);
+					DrawDebugLine(World, At.Location, SlotDraw, FColor::Yellow, false, -1.f, 0, 1.f);
+					DrawDebugLine(World, SlotDraw, TargetDraw, FColor::Red, false, -1.f, 0, 0.5f);
 				}
-				const float DistSq = FVector::DistSquared(At.Location, Candidates[c].Location);
-				if (DistSq < BestEnemyDistSq)
-				{
-					BestEnemyDistSq = DistSq;
-					BestEnemy = c;
-				}
-			}
-
-			if (BestEnemy != INDEX_NONE)
-			{
-				const FMCTargetCandidate& Enemy = Candidates[BestEnemy];
-
-				Targeting->bHasNearestEnemy = true;
-				Targeting->NearestEnemyLocation = Enemy.Location;
-				Targeting->DistanceToNearestEnemy = FMath::Sqrt(BestEnemyDistSq);
 			}
 			else
 			{
-				Targeting->bHasNearestEnemy = false;
-				Targeting->NearestEnemyLocation = FVector::ZeroVector;
-				Targeting->DistanceToNearestEnemy = TNumericLimits<float>::Max();
+				Targeting.bHasTarget = false;
+				Targeting.CurrentTarget = FMassEntityHandle();
+				Targeting.SlotIndex = INDEX_NONE;
+				Targeting.TargetLocation = FVector::ZeroVector;
+				Targeting.SlotLocation = FVector::ZeroVector;
+				Targeting.DistanceToTarget = TNumericLimits<float>::Max();
+				Targeting.DistanceToSlot = TNumericLimits<float>::Max();
+
+				int32 BestEnemy = INDEX_NONE;
+				float BestEnemyDistSq = TNumericLimits<float>::Max();
+				for (int32 c = 0; c < Candidates.Num(); ++c)
+				{
+					if (Candidates[c].Faction == At.Faction)
+					{
+						continue;
+					}
+					const float DistSq = FVector::DistSquared(At.Location, Candidates[c].Location);
+					if (DistSq < BestEnemyDistSq)
+					{
+						BestEnemyDistSq = DistSq;
+						BestEnemy = c;
+					}
+				}
+
+				if (BestEnemy != INDEX_NONE)
+				{
+					Targeting.bHasNearestEnemy = true;
+					Targeting.NearestEnemyLocation = Candidates[BestEnemy].Location;
+					Targeting.DistanceToNearestEnemy = FMath::Sqrt(BestEnemyDistSq);
+				}
+				else
+				{
+					Targeting.bHasNearestEnemy = false;
+					Targeting.NearestEnemyLocation = FVector::ZeroVector;
+					Targeting.DistanceToNearestEnemy = TNumericLimits<float>::Max();
+				}
 			}
 		}
-	}
+	});
 }
