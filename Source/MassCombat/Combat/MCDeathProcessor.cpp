@@ -20,6 +20,7 @@ void UMCDeathProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& E
 {
 	DetectNpcQuery.AddRequirement<FMCUnitFragment>(EMassFragmentAccess::ReadOnly);
 	DetectNpcQuery.AddRequirement<FMCDeathFragment>(EMassFragmentAccess::ReadWrite);
+	DetectNpcQuery.AddTagRequirement<FMCPlayerTag>(EMassFragmentPresence::None);
 	DetectNpcQuery.AddTagRequirement<FMCDeadTag>(EMassFragmentPresence::None);
 
 	DetectPlayerQuery.AddRequirement<FMCUnitFragment>(EMassFragmentAccess::ReadOnly);

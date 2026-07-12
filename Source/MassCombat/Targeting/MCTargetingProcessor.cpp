@@ -522,6 +522,7 @@ void UMCTargetingProcessor::WriteResults(FMassExecutionContext& Context, UWorld*
 		for (int32 i = 0; i < Num; ++i, ++a)
 		{
 			const FMCAttacker& At = Attackers[a];
+			checkf(At.Handle == Ctx.GetEntity(i), TEXT("Attacker order diverged from GatherAttackers chunk iteration"));
 			FMCTargetingFragment& Targeting = Targetings[i];
 
 			Targeting.NextRetargetTime = At.NextRetargetTime;
