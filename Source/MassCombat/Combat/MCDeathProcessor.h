@@ -16,5 +16,10 @@ protected:
 	virtual void ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager) override;
 	virtual void Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context) override;
 
-	FMassEntityQuery EntityQuery;
+	UPROPERTY(EditDefaultsOnly, Category = "Death")
+	float DeathDuration = 2.f;
+
+	FMassEntityQuery DetectNpcQuery;
+	FMassEntityQuery DetectPlayerQuery;
+	FMassEntityQuery CleanupQuery;
 };
