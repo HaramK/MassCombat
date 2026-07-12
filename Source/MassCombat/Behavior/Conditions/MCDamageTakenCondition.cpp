@@ -2,6 +2,17 @@
 #include "StateTreeExecutionContext.h"
 #include "StateTreeLinker.h"
 
+#if WITH_EDITOR
+FText FMCDamageTakenCondition::GetDescription(const FGuid& ID, FStateTreeDataView InstanceDataView, const IStateTreeBindingLookup& BindingLookup, EStateTreeNodeFormatting Formatting) const
+{
+	const FInstanceDataType* Data = InstanceDataView.GetPtr<FInstanceDataType>();
+	check(Data);
+	return Data->bInvert
+		? NSLOCTEXT("MassCombat", "MCDamageTakenConditionDescInv", "NO unreacted damage")
+		: NSLOCTEXT("MassCombat", "MCDamageTakenConditionDesc", "Damage Taken (unreacted)");
+}
+#endif
+
 bool FMCDamageTakenCondition::Link(FStateTreeLinker& Linker)
 {
 	Linker.LinkExternalData(EngagementHandle);
