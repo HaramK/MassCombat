@@ -87,8 +87,6 @@ void FMCActionLib::Stop(FMCActionFragment& Frag, const FMCActionSetParams& Set, 
 
 	if (const UMCActionDef* Def = Set.Actions[Index])
 	{
-		Frag.ActiveTags.RemoveTags(Def->GrantsTags);
-
 		if (Def->CooldownTime > 0.f)
 		{
 			RT.CooldownEnd = Now + Def->CooldownTime;
@@ -96,4 +94,19 @@ void FMCActionLib::Stop(FMCActionFragment& Frag, const FMCActionSetParams& Set, 
 	}
 
 	RT.ActiveUntil = 0.f;
+
+	RebuildActiveTags(Frag, Set);
+}
+
+void FMCActionLib::RebuildActiveTags(FMCActionFragment& Frag, const FMCActionSetParams& Set)
+{
+	Frag.ActiveTags.Reset();
+	for (int32 i = 0; i < Set.Actions.Num(); ++i)
+	{
+		const UMCActionDef* Def = Set.Actions[i];
+		if (Def && Frag.Runtimes.IsValidIndex(i) && Frag.Runtimes[i].ActiveUntil > 0.f)
+		{
+			Frag.ActiveTags.AppendTags(Def->GrantsTags);
+		}
+	}
 }

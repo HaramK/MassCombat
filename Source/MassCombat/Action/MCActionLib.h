@@ -19,4 +19,6 @@ struct FMCActionLib
 	static bool TryStart(FMCActionFragment& Frag, const FMCActionSetParams& Set, FGameplayTag ActionTag, float Now);
 
 	static void Stop(FMCActionFragment& Frag, const FMCActionSetParams& Set, int32 Index, float Now);
+
+	static void RebuildActiveTags(FMCActionFragment& Frag, const FMCActionSetParams& Set);
 };
