@@ -5,6 +5,9 @@
 #include "Unit/MCUnitFragments.h"
 #include "Animation/AnimMontage.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "MassSignalSubsystem.h"
+#include "MassStateTreeTypes.h"
 #include "MassEntityManager.h"
 
 float FMCActionStep_PlayMontage::GetDuration(const FMCActionStepContext& Ctx) const
@@ -80,6 +83,11 @@ void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
 	{
 		TargetEngagement->LastAttackerUnit = Ctx.SelfEntity;
 		TargetEngagement->LastDamagedTime = Ctx.Now;
+
+		if (UMassSignalSubsystem* SignalSubsystem = Ctx.World ? Ctx.World->GetSubsystem<UMassSignalSubsystem>() : nullptr)
+		{
+			SignalSubsystem->SignalEntity(UE::Mass::Signals::NewStateTreeTaskRequired, Target);
+		}
 	}
 }
 

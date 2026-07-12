@@ -41,13 +41,11 @@ EStateTreeRunStatus FMCStandTask::EnterState(FStateTreeExecutionContext& Context
 	MoveTarget.CreateNewAction(EMassMovementAction::Animate, *World);
 	MoveTarget.DesiredSpeed.Set(0.f);
 
-	if (Data.Duration > 0.f)
-	{
-		FMassStateTreeExecutionContext& MassContext = static_cast<FMassStateTreeExecutionContext&>(Context);
-		UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
-		SignalSubsystem.DelaySignalEntityDeferred(MassContext.GetMassEntityExecutionContext(),
-			UE::Mass::Signals::NewStateTreeTaskRequired, MassContext.GetEntity(), Data.Duration);
-	}
+	FMassStateTreeExecutionContext& MassContext = static_cast<FMassStateTreeExecutionContext&>(Context);
+	UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
+	const float Delay = Data.Duration > 0.f ? Data.Duration : Data.ReevaluateInterval;
+	SignalSubsystem.DelaySignalEntityDeferred(MassContext.GetMassEntityExecutionContext(),
+		UE::Mass::Signals::NewStateTreeTaskRequired, MassContext.GetEntity(), Delay);
 
 	return EStateTreeRunStatus::Running;
 }
@@ -59,6 +57,10 @@ EStateTreeRunStatus FMCStandTask::Tick(FStateTreeExecutionContext& Context, cons
 
 	if (Data.Duration <= 0.f)
 	{
+		FMassStateTreeExecutionContext& MassContext = static_cast<FMassStateTreeExecutionContext&>(Context);
+		UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
+		SignalSubsystem.DelaySignalEntityDeferred(MassContext.GetMassEntityExecutionContext(),
+			UE::Mass::Signals::NewStateTreeTaskRequired, MassContext.GetEntity(), Data.ReevaluateInterval);
 		return EStateTreeRunStatus::Running;
 	}
 	return Data.Time < Data.Duration ? EStateTreeRunStatus::Running : EStateTreeRunStatus::Succeeded;

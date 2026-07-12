@@ -8,6 +8,8 @@
 #include "MassExecutionContext.h"
 #include "MassEntityQuery.h"
 #include "MassCommonFragments.h"
+#include "MassSignalSubsystem.h"
+#include "MassStateTreeTypes.h"
 #include "GameFramework/Actor.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -58,6 +60,7 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 		FMCUnitFragment* Unit;
 		FMCEngagementFragment* Engagement;
 		FVector Location;
+		FMassEntityHandle Handle;
 		uint8 Faction;
 	};
 
@@ -117,11 +120,12 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 			{
 				continue;
 			}
-			Candidates.Add({ &Units[i], &Engagements[i], Transforms[i].GetTransform().GetLocation(), Faction });
+			Candidates.Add({ &Units[i], &Engagements[i], Transforms[i].GetTransform().GetLocation(), Ctx.GetEntity(i), Faction });
 		}
 	});
 
 	int32 HitCount = 0;
+	TArray<FMassEntityHandle> HitEntities;
 	for (const FHitCandidate& Cand : Candidates)
 	{
 		FVector ToTarget = Cand.Location - Origin;
@@ -159,12 +163,21 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 		Cand.Unit->Health -= Damage;
 		Cand.Engagement->LastAttackerUnit = PlayerEntity;
 		Cand.Engagement->LastDamagedTime = Now;
+		HitEntities.Add(Cand.Handle);
 		++HitCount;
 
 		if (bDraw)
 		{
 			DrawDebugSphere(World, Cand.Location, 50.f, 12, FColor::Green, false, 1.0f, 0, 2.5f);
 			DrawDebugLine(World, Cand.Location, Cand.Location + FVector(0.f, 0.f, 150.f), FColor::Green, false, 1.0f, 0, 3.0f);
+		}
+	}
+
+	if (HitEntities.Num() > 0)
+	{
+		if (UMassSignalSubsystem* SignalSubsystem = World->GetSubsystem<UMassSignalSubsystem>())
+		{
+			SignalSubsystem->SignalEntities(UE::Mass::Signals::NewStateTreeTaskRequired, HitEntities);
 		}
 	}
 
