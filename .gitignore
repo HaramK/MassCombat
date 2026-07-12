@@ -12,6 +12,7 @@
 *.suo
 *.opendb
 *.userprefs
+*.DotSettings.user
 
 # Compiled source files
 Binaries/
@@ -50,3 +51,7 @@ Packaged/
 *.log
 *.dmp
 .vsconfig
+CONVENTIONS.md
+docs/
+Content/MassCombat/Editor/EUW_VAT_Utils_544.uasset
+Tasks/
