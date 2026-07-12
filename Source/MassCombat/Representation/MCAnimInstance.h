@@ -12,9 +12,6 @@ class MASSCOMBAT_API UMCAnimInstance : public UAnimInstance
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void PlayAttackMontage(UAnimMontage* Montage);
-
 	void PlayMontageSynced(UAnimMontage* Montage, float StartPosition, bool bInstantBlend);
 
 	UPROPERTY(BlueprintReadOnly, Category = "Locomotion")

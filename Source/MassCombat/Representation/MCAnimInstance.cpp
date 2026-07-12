@@ -2,19 +2,6 @@
 #include "Animation/AnimMontage.h"
 #include "Components/SkeletalMeshComponent.h"
 
-void UMCAnimInstance::PlayAttackMontage(UAnimMontage* Montage)
-{
-	if (!Montage)
-	{
-		return;
-	}
-
-	if (!Montage_IsPlaying(Montage))
-	{
-		Montage_Play(Montage);
-	}
-}
-
 bool UMCAnimInstance::IsMontageAlreadyPlaying(const UAnimMontage* Montage) const
 {
 	for (const FAnimMontageInstance* MontageInstance : MontageInstances)
