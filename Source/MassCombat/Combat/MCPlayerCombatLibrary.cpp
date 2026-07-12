@@ -1,5 +1,4 @@
 #include "Combat/MCPlayerCombatLibrary.h"
-#include "Combat/MCCombatFragments.h"
 #include "Unit/MCUnitFragments.h"
 #include "MassEntitySubsystem.h"
 #include "MassActorSubsystem.h"
@@ -8,8 +7,7 @@
 #include "MassExecutionContext.h"
 #include "MassEntityQuery.h"
 #include "MassCommonFragments.h"
-#include "MassSignalSubsystem.h"
-#include "MassStateTreeTypes.h"
+#include "Combat/MCDamageSubsystem.h"
 #include "GameFramework/Actor.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -57,8 +55,6 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 
 	struct FHitCandidate
 	{
-		FMCUnitFragment* Unit;
-		FMCEngagementFragment* Engagement;
 		FVector Location;
 		FMassEntityHandle Handle;
 		uint8 Faction;
@@ -93,12 +89,17 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 	}
 	const uint8 PlayerFaction = PlayerInfo->Faction;
 
+	UMCDamageSubsystem* DamageSubsystem = World->GetSubsystem<UMCDamageSubsystem>();
+	if (!DamageSubsystem)
+	{
+		return 0;
+	}
+
 	TArray<FHitCandidate> Candidates;
 
 	FMassEntityQuery Query(EntityManager.AsShared());
 	Query.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
-	Query.AddRequirement<FMCUnitFragment>(EMassFragmentAccess::ReadWrite);
-	Query.AddRequirement<FMCEngagementFragment>(EMassFragmentAccess::ReadWrite);
+	Query.AddRequirement<FMCUnitFragment>(EMassFragmentAccess::ReadOnly);
 	Query.AddConstSharedRequirement<FMCUnitInfoFragment>();
 
 	FMassExecutionContext Context(EntityManager);
@@ -106,8 +107,7 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 	{
 		const uint8 Faction = Ctx.GetConstSharedFragment<FMCUnitInfoFragment>().Faction;
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
-		const TArrayView<FMCUnitFragment> Units = Ctx.GetMutableFragmentView<FMCUnitFragment>();
-		const TArrayView<FMCEngagementFragment> Engagements = Ctx.GetMutableFragmentView<FMCEngagementFragment>();
+		const TConstArrayView<FMCUnitFragment> Units = Ctx.GetFragmentView<FMCUnitFragment>();
 
 		const int32 Num = Ctx.GetNumEntities();
 		for (int32 i = 0; i < Num; ++i)
@@ -120,12 +120,11 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 			{
 				continue;
 			}
-			Candidates.Add({ &Units[i], &Engagements[i], Transforms[i].GetTransform().GetLocation(), Ctx.GetEntity(i), Faction });
+			Candidates.Add({ Transforms[i].GetTransform().GetLocation(), Ctx.GetEntity(i), Faction });
 		}
 	});
 
 	int32 HitCount = 0;
-	TArray<FMassEntityHandle> HitEntities;
 	for (const FHitCandidate& Cand : Candidates)
 	{
 		FVector ToTarget = Cand.Location - Origin;
@@ -160,24 +159,13 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 			continue;
 		}
 
-		Cand.Unit->Health -= Damage;
-		Cand.Engagement->LastAttackerUnit = PlayerEntity;
-		Cand.Engagement->LastDamagedTime = Now;
-		HitEntities.Add(Cand.Handle);
+		DamageSubsystem->QueueDamage(Cand.Handle, PlayerEntity, Damage);
 		++HitCount;
 
 		if (bDraw)
 		{
 			DrawDebugSphere(World, Cand.Location, 50.f, 12, FColor::Green, false, 1.0f, 0, 2.5f);
 			DrawDebugLine(World, Cand.Location, Cand.Location + FVector(0.f, 0.f, 150.f), FColor::Green, false, 1.0f, 0, 3.0f);
-		}
-	}
-
-	if (HitEntities.Num() > 0)
-	{
-		if (UMassSignalSubsystem* SignalSubsystem = World->GetSubsystem<UMassSignalSubsystem>())
-		{
-			SignalSubsystem->SignalEntities(UE::Mass::Signals::NewStateTreeTaskRequired, HitEntities);
 		}
 	}
 

@@ -2,12 +2,10 @@
 #include "Combat/MCCombatFragments.h"
 #include "Movement/MCOrientationFragments.h"
 #include "Representation/MCRepresentationFragments.h"
-#include "Unit/MCUnitFragments.h"
 #include "Animation/AnimMontage.h"
+#include "Combat/MCDamageSubsystem.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
-#include "MassSignalSubsystem.h"
-#include "MassStateTreeTypes.h"
 #include "MassEntityManager.h"
 
 float FMCActionStep_PlayMontage::GetDuration(const FMCActionStepContext& Ctx) const
@@ -59,35 +57,16 @@ void FMCActionStep_RotateToTarget::OnEnd(const FMCActionStepContext& Ctx) const
 
 void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
 {
-	if (!Ctx.EntityManager || !Ctx.Engagement)
+	if (!Ctx.Engagement)
 	{
 		return;
 	}
 
 	Ctx.Engagement->LastAttackTime = Ctx.Now;
 
-	const FMassEntityHandle Target = Ctx.LockedTarget;
-	if (!Ctx.EntityManager->IsEntityValid(Target))
+	if (UMCDamageSubsystem* DamageSubsystem = Ctx.World ? Ctx.World->GetSubsystem<UMCDamageSubsystem>() : nullptr)
 	{
-		return;
-	}
-
-	FMCUnitFragment* TargetUnit = Ctx.EntityManager->GetFragmentDataPtr<FMCUnitFragment>(Target);
-	if (!TargetUnit || TargetUnit->Health <= 0.f)
-	{
-		return;
-	}
-	TargetUnit->Health -= Damage;
-
-	if (FMCEngagementFragment* TargetEngagement = Ctx.EntityManager->GetFragmentDataPtr<FMCEngagementFragment>(Target))
-	{
-		TargetEngagement->LastAttackerUnit = Ctx.SelfEntity;
-		TargetEngagement->LastDamagedTime = Ctx.Now;
-
-		if (UMassSignalSubsystem* SignalSubsystem = Ctx.World ? Ctx.World->GetSubsystem<UMassSignalSubsystem>() : nullptr)
-		{
-			SignalSubsystem->SignalEntity(UE::Mass::Signals::NewStateTreeTaskRequired, Target);
-		}
+		DamageSubsystem->QueueDamage(Ctx.LockedTarget, Ctx.SelfEntity, Damage);
 	}
 }
 
