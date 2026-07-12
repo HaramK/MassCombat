@@ -17,3 +17,17 @@ struct FMCEngagementFragment : public FMassFragment
 
 	float LastAttackTime = -1.e6f;
 };
+
+USTRUCT()
+struct FMCDeadTag : public FMassTag
+{
+	GENERATED_BODY()
+};
+
+USTRUCT()
+struct FMCDeathFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	float DestroyTime = 0.f;
+};

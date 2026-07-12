@@ -1,6 +1,7 @@
 #include "Movement/MCOrientationIntentProcessor.h"
 #include "Movement/MCOrientationFragments.h"
 #include "Targeting/MCTargetingFragments.h"
+#include "Combat/MCCombatFragments.h"
 #include "MassExecutionContext.h"
 #include "MassCommonFragments.h"
 #include "MassCommonTypes.h"
@@ -22,6 +23,7 @@ void UMCOrientationIntentProcessor::ConfigureQueries(const TSharedRef<FMassEntit
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FMCTargetingFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddRequirement<FMCOrientationFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddTagRequirement<FMCDeadTag>(EMassFragmentPresence::None);
 	EntityQuery.AddRequirement<FMassMoveTargetFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::Optional);
 }
 

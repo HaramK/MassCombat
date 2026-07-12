@@ -32,6 +32,7 @@ void UMCTargetingProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddRequirement<FMCTargetingFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FMCEngagementFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddTagRequirement<FMCDeadTag>(EMassFragmentPresence::None);
 	EntityQuery.AddConstSharedRequirement<FMCUnitInfoFragment>();
 	EntityQuery.AddConstSharedRequirement<FMCTargetingParams>();
 }
