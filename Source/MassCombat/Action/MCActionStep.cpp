@@ -1,8 +1,13 @@
 #include "Action/MCActionStep.h"
 #include "Combat/MCCombatFragments.h"
+#include "Movement/MCOrientationFragments.h"
+#include "Representation/MCRepresentationFragments.h"
 #include "Unit/MCUnitFragments.h"
 #include "Animation/AnimMontage.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "MassSignalSubsystem.h"
+#include "MassStateTreeTypes.h"
 #include "MassEntityManager.h"
 
 float FMCActionStep_PlayMontage::GetDuration(const FMCActionStepContext& Ctx) const
@@ -38,28 +43,28 @@ void FMCActionStep_Print::OnStart(const FMCActionStepContext& Ctx) const
 
 void FMCActionStep_RotateToTarget::OnStart(const FMCActionStepContext& Ctx) const
 {
-	if (Ctx.Combat)
+	if (Ctx.Orientation)
 	{
-		Ctx.Combat->FaceTargetEndTime = Ctx.Now + Duration;
+		Ctx.Orientation->FaceTargetEndTime = Ctx.Now + Duration;
 	}
 }
 
 void FMCActionStep_RotateToTarget::OnEnd(const FMCActionStepContext& Ctx) const
 {
-	if (Ctx.Combat)
+	if (Ctx.Orientation)
 	{
-		Ctx.Combat->FaceTargetEndTime = 0.f;
+		Ctx.Orientation->FaceTargetEndTime = 0.f;
 	}
 }
 
 void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
 {
-	if (!Ctx.EntityManager || !Ctx.Combat)
+	if (!Ctx.EntityManager || !Ctx.Engagement)
 	{
 		return;
 	}
 
-	Ctx.Combat->LastAttackTime = Ctx.Now;
+	Ctx.Engagement->LastAttackTime = Ctx.Now;
 
 	const FMassEntityHandle Target = Ctx.LockedTarget;
 	if (!Ctx.EntityManager->IsEntityValid(Target))
@@ -74,17 +79,22 @@ void FMCActionStep_ApplyDamage::OnStart(const FMCActionStepContext& Ctx) const
 	}
 	TargetUnit->Health -= Damage;
 
-	if (FMCCombatFragment* TargetCombat = Ctx.EntityManager->GetFragmentDataPtr<FMCCombatFragment>(Target))
+	if (FMCEngagementFragment* TargetEngagement = Ctx.EntityManager->GetFragmentDataPtr<FMCEngagementFragment>(Target))
 	{
-		TargetCombat->LastAttackerUnit = Ctx.SelfEntity;
-		TargetCombat->LastDamagedTime = Ctx.Now;
+		TargetEngagement->LastAttackerUnit = Ctx.SelfEntity;
+		TargetEngagement->LastDamagedTime = Ctx.Now;
+
+		if (UMassSignalSubsystem* SignalSubsystem = Ctx.World ? Ctx.World->GetSubsystem<UMassSignalSubsystem>() : nullptr)
+		{
+			SignalSubsystem->SignalEntity(UE::Mass::Signals::NewStateTreeTaskRequired, Target);
+		}
 	}
 }
 
 void FMCActionStep_MarkHitReacted::OnStart(const FMCActionStepContext& Ctx) const
 {
-	if (Ctx.Combat)
+	if (Ctx.Engagement)
 	{
-		Ctx.Combat->LastHitReactTime = Ctx.Now;
+		Ctx.Engagement->LastHitReactTime = Ctx.Now;
 	}
 }

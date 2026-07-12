@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "StateTreeConditionBase.h"
-#include "Combat/MCCombatFragments.h"
+#include "Targeting/MCTargetingFragments.h"
 #include "MCDistanceCondition.generated.h"
 
 UENUM()
@@ -39,5 +39,9 @@ struct FMCDistanceCondition : public FStateTreeConditionCommonBase
 	virtual const UStruct* GetInstanceDataType() const override { return FInstanceDataType::StaticStruct(); }
 	virtual bool TestCondition(FStateTreeExecutionContext& Context) const override;
 
-	TStateTreeExternalDataHandle<FMCCombatFragment> CombatHandle;
+#if WITH_EDITOR
+	virtual FText GetDescription(const FGuid& ID, FStateTreeDataView InstanceDataView, const IStateTreeBindingLookup& BindingLookup, EStateTreeNodeFormatting Formatting) const override;
+#endif
+
+	TStateTreeExternalDataHandle<FMCTargetingFragment> TargetingHandle;
 };

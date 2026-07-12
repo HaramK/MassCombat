@@ -5,7 +5,7 @@
 #include "MassEntityTypes.h"
 #include "MCTargetingProcessor.generated.h"
 
-struct FMCCombatFragment;
+struct FMCTargetingFragment;
 class UWorld;
 
 struct FMCTargetCandidate
@@ -21,13 +21,16 @@ struct FMCTargetCandidate
 
 struct FMCAttacker
 {
-	FMCCombatFragment* Combat;
+	FMCTargetingFragment* Targeting;
 	FVector Location;
 	uint8 Faction;
 	int32 EntityIndex;
 	int32 TargetIdx;
 	FMassEntityHandle Handle;
 	FMassEntityHandle PrevTarget;
+	FMassEntityHandle LastAttackerUnit;
+	float LastDamagedTime;
+	float LastAttackTime;
 	bool bPreferPlayer;
 	float PlayerRadiusSq;
 };
@@ -52,6 +55,7 @@ protected:
 	void AssignReturningTargets(float Now, float CombatWindow, float RetargetInterval);
 	void AssignOpenTargets();
 	void AssignSlots();
+	void DetectMutualCycles();
 	void WriteResults(UWorld* World, bool bDrawSlots);
 
 	FMassEntityQuery GatherQuery;
@@ -65,4 +69,10 @@ protected:
 	TArray<bool> CandTargetsPlayer;
 	TArray<int32> Contenders;
 	TArray<TArray<int32>> Groups;
+
+	TArray<int32> CycleNext;
+	TArray<uint8> InCycle;
+	TArray<uint8> CycleClassified;
+	TArray<int32> CyclePathMark;
+	TArray<int32> CyclePath;
 };

@@ -23,6 +23,9 @@ struct FMCStandInstanceData
 	UPROPERTY(EditAnywhere, Category = "Stand")
 	float Duration = 0.f;
 
+	UPROPERTY(EditAnywhere, Category = "Stand")
+	float ReevaluateInterval = 0.5f;
+
 	float Time = 0.f;
 };
 

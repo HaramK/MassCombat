@@ -1,5 +1,5 @@
 #include "Representation/MCAnimInitProcessor.h"
-#include "Combat/MCCombatFragments.h"
+#include "Representation/MCRepresentationFragments.h"
 #include "MassExecutionContext.h"
 #include "Engine/World.h"
 
