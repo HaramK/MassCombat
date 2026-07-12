@@ -37,18 +37,21 @@ Hundreds of agents fight in melee using a data-oriented entity pipeline (Mass), 
 
 ```
 Source/MassCombat/
-├── Unit/            Faction, health, spawn/init  (MCUnitTrait, MCPlayerTrait)
-├── Combat/          Combat state, movement, death (MCCombatTrait, processors)
-├── Targeting/       Target selection + attacker-slot assignment
-├── Behavior/        StateTree Tasks & Conditions  (the AI vocabulary)
-├── Action/          Simple Action System          (defs, steps, runtime)
-├── Representation/  VAT anim state + ISM update    (rendering/representation)
-├── Actors/          Hybrid actor (player / hero NPC)
+├── Unit/            Faction, health, spawn/init         (MCUnitTrait, MCPlayerTrait)
+├── Targeting/       Target selection + attacker slots    (MCTargetingProcessor)
+├── Combat/          Engagement, damage queue, death      (subsystems + resolver)
+├── Movement/        Facing / orientation intent          (MCOrientationIntentProcessor)
+├── Behavior/        StateTree Tasks & Conditions         (the AI vocabulary)
+├── Action/          Simple Action System                 (defs, steps, runtime)
+├── Representation/  VAT anim state + ISM update          (rendering)
+├── Actors/          Hybrid actor (hero NPC)
 ├── Core/            GameMode, project settings
 └── Debug/           StateTree debug visualization
 ```
 
-Responsibilities are intentionally split between **gameplay** processors (targeting, combat, death) and **representation** processors (anim state, ISM/VAT update), so visual concerns never leak into gameplay logic.
+The combat domain is decomposed so that **each fragment has a single writing processor**: targeting is written only by `UMCTargetingProcessor`, engagement history only by the damage resolver, orientation only by the orientation-intent processor. This keeps Mass queries narrow and parallelizable, and gameplay processors stay separate from **representation** processors (anim state, ISM/VAT update) so visual concerns never leak into gameplay logic.
+
+Damage never writes across entities directly — sources enqueue events into `UMCDamageSubsystem`, and a single `UMCDamageResolutionProcessor` applies them, preserving the single-writer rule for health and engagement.
 
 > The **animation synchronization** and **montage handling** in the representation layer are adapted from Epic's **City Sample** crowd setup.
 
@@ -61,13 +64,13 @@ The core problem in crowd melee is *"who attacks whom, and from where."* This is
 1. **Gather candidates & attackers** — every targetable unit and every attacker is collected with its faction, location, and slot capacity.
 2. **Player-priority pass** — attackers flagged `bPreferPlayerTarget` snap to the player when within `PlayerTargetRadius`.
 3. **Returning targets** — during a combat window, attackers keep their previous target and re-evaluate only on `NextRetargetTime`, avoiding target thrash.
-4. **Open assignment** — remaining attackers pick the nearest valid enemy that still has free slots.
+4. **Open assignment** — remaining attackers pick the nearest valid enemy that still has free slots, searching only within `TargetSearchRadius`. The nearby-enemy lookup reuses the engine's existing **navigation obstacle hash grid** (`UMassNavigationSubsystem`) instead of an all-vs-all scan, so cost scales with local density rather than total unit count.
 5. **Slot assignment** — attackers around a target are packed into slots `0..MaxAttackerCounts-1`:
-   - **Stable mode** keeps each attacker's existing slot (tracked via an occupied-slot bitmask) and only fills the gaps left by the fallen.
+   - **Stable mode** keeps each attacker's existing slot and only fills the gaps left by the fallen.
    - **Recalc mode** (`bRecalcSlotsOnAttackerLoss`) redistributes slots deterministically by entity index when an attacker is lost.
-   - **Reverse-slot handling** lets slots be addressed from the opposite side, exposed to AI via the `MC Is Reverse Slot` condition.
+   - **Mutual-engagement handling** — when attackers target one another in a cycle (`A↔B`, or longer `A→B→C→A` rings), they close to the target's center instead of orbiting empty slots.
 
-Each entity's resolved engagement data (target, slot location, distances, flags) lives in `FMCCombatFragment`, which the StateTree Tasks and Conditions then read.
+An entity's resolved data is split by domain: the target, slot location, and distances live in `FMCTargetingFragment`; combat history (last attacker, hit/attack timestamps) lives in `FMCEngagementFragment`. The StateTree Tasks and Conditions read these directly.
 
 ---
 
@@ -80,7 +83,10 @@ Traits are the authoring surface (added to a Mass config in the editor); fragmen
 | Trait | Purpose |
 |-------|---------|
 | `UMCUnitTrait` (*MC Unit*) | Faction, max health, attacker-slot capacity & radius, slot-recalc policy. |
-| `UMCCombatTrait` (*MC Combat*) | Movement/attack tuning, targeting preferences, walk-anim play-rate mapping, default VAT data & attack montage. |
+| `UMCTargetingTrait` (*MC Targeting*) | Installs targeting state; player-target preference, player/search radii. |
+| `UMCCombatTrait` (*MC Combat*) | Installs engagement history and death state. |
+| `UMCOrientationTrait` (*MC Orientation*) | Installs facing / orientation intent state. |
+| `UMCAnimTrait` (*MC Anim*) | Default VAT anim data, walk-anim play-rate mapping, idle/walk state indices. |
 | `UMCActionTrait` (*MC Action*) | Installs an entity's set of available `UMCActionDef`s. |
 | `UMCPlayerTrait` (*MC Player*) | Tags an entity as the player so targeting can prioritize it. |
 
@@ -90,9 +96,13 @@ Traits are the authoring surface (added to a Mass config in the editor); fragmen
 |----------|------|----------|
 | `FMCUnitFragment` | per-entity | Current `Health`. |
 | `FMCUnitInfoFragment` | const shared | Faction, `MaxHealth`, `MaxAttackerCounts`, `AttackerSlotRadius`, recalc policy. |
-| `FMCCombatFragment` | per-entity | Target, slot index/location, distances, retarget/cooldown timers, last-attacker, hit/attack timestamps, and state flags (`bHasTarget`, `bReverseSlot`, `bMovementBlocked`, …). |
-| `FMCCombatParams` | const shared | Move speed, attack range, targeting radius, walk-anim mapping, state indices, default anim data & attack montage. |
+| `FMCTargetingFragment` | per-entity | Target, slot index/location, distances, nearest-enemy, retarget timer, `bHasTarget`. |
+| `FMCTargetingParams` | const shared | Player-target preference, `PlayerTargetRadius`, `TargetSearchRadius`. |
+| `FMCEngagementFragment` | per-entity | Last attacker, last damaged / hit-react / attack timestamps. |
+| `FMCOrientationFragment` | per-entity | Face-target window end, look-at turn rate, look-at-nearest flag. |
+| `FMCDeathFragment` + `FMCDeadTag` | per-entity + tag | Delayed-destroy time; the `Dead` tag removes the entity from combat queries while its death plays out. |
 | `FMCAnimStateFragment` | per-entity | Active VAT `AnimData`, current montage, global start time, play rate, current frame, state index. |
+| `FMCAnimParams` | const shared | Walk-speed threshold & play-rate mapping, idle/walk anim + state indices, default VAT data. |
 | `FMCActionFragment` | per-entity | Per-action runtime (cooldown/active windows) + currently granted `ActiveTags`. |
 | `FMCActionSetParams` | const shared | The list of `UMCActionDef`s available to the entity. |
 | `FMCPlayerTag` | tag | Marks the player entity. |
@@ -110,11 +120,12 @@ A compact, reusable AI vocabulary. All Tasks/Conditions read Mass fragments dire
 | `MC Move To Target Slot` | Path to the assigned attacker slot around the current target. |
 | `MC Move To Nearest Enemy` | Loiter near the nearest enemy within a min/max radius (approach without crowding). |
 | `MC Look At Nearest Enemy` | Rotate to face the nearest enemy at a configurable turn rate. |
-| `MC Attack` | Run an attack with cooldown gating and montage timing. |
-| `MC Perform Action` | Execute a `UMCActionDef` from the Action System (see below). |
+| `MC Perform Action` | Execute a `UMCActionDef` from the Action System (attacks, hit-reacts — see below). |
 | `MC Stand` | Hold position / idle until a StateTree transition stops it. |
 
 > `MC Move To Target Slot` and `MC Move To Nearest Enemy` share a common `FMCMoveToTargetTask` base (path/repath/avoidance handling) and only override the goal source.
+>
+> There is no bespoke attack task — an attack is just `MC Perform Action` running an attack `UMCActionDef` (rotate → montage → apply damage), so attacks and reactions share one code path.
 
 ### Conditions
 
@@ -123,7 +134,6 @@ A compact, reusable AI vocabulary. All Tasks/Conditions read Mass fragments dire
 | `MC Has Target` | Whether the entity has a valid target. |
 | `MC Has Slot` | Whether the entity holds a valid attacker slot. |
 | `MC Within Distance` | Distance to target / slot / nearest enemy against a threshold (selectable source). |
-| `MC Is Reverse Slot` | Whether the entity's slot is a reverse-side slot. |
 | `MC Damage Taken` | Whether the entity was recently damaged (drives hit-react transitions). |
 
 *(Every condition supports `bInvert`.)*
@@ -190,7 +200,7 @@ This is a focused crowd-combat sandbox; several areas are intentionally out of s
 | **Simple health model** | Health is a single float with direct damage — no armor, mitigation, or GAS-style attribute stacks. |
 | **Single-player** | Mass replication is not implemented; the focus is local crowd simulation. |
 | **Limited animation states** | Fixed idle/walk/attack state indices, no blend spaces (a constraint of the VAT pipeline). |
-| **Slot cap** | The slot-occupancy bitmask supports up to **32 attackers per target**. |
+| **Bounded target search** | NPCs acquire targets only within `TargetSearchRadius` (via the reused navigation grid); there is no global aggro. |
 | **Two-faction model** | Faction is a `uint8`; complex alliance relationships are not modeled. |
 
 **Possible next steps:** auto-derive state indices from anim metadata, ranged actions, and Mass network replication.
