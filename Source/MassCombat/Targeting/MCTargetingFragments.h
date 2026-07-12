@@ -30,8 +30,6 @@ struct FMCTargetingFragment : public FMassFragment
 	uint8 bHasTarget : 1 = 0;
 
 	uint8 bHasNearestEnemy : 1 = 0;
-
-	uint8 bReverseSlot : 1 = 0;
 };
 
 USTRUCT()

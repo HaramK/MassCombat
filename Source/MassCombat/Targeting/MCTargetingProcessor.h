@@ -55,6 +55,7 @@ protected:
 	void AssignReturningTargets(float Now, float CombatWindow, float RetargetInterval);
 	void AssignOpenTargets();
 	void AssignSlots();
+	void DetectMutualCycles();
 	void WriteResults(UWorld* World, bool bDrawSlots);
 
 	FMassEntityQuery GatherQuery;
@@ -68,4 +69,10 @@ protected:
 	TArray<bool> CandTargetsPlayer;
 	TArray<int32> Contenders;
 	TArray<TArray<int32>> Groups;
+
+	TArray<int32> CycleNext;
+	TArray<uint8> InCycle;
+	TArray<uint8> CycleClassified;
+	TArray<int32> CyclePathMark;
+	TArray<int32> CyclePath;
 };

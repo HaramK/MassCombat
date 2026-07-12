@@ -407,6 +407,71 @@ void UMCTargetingProcessor::AssignSlots()
 	}
 }
 
+void UMCTargetingProcessor::DetectMutualCycles()
+{
+	const int32 Num = Attackers.Num();
+
+	CycleNext.Reset();
+	CycleNext.SetNumUninitialized(Num);
+	InCycle.Reset();
+	InCycle.SetNumZeroed(Num);
+	CycleClassified.Reset();
+	CycleClassified.SetNumZeroed(Num);
+	CyclePathMark.Reset();
+	CyclePathMark.SetNumZeroed(Num);
+
+	for (int32 a = 0; a < Num; ++a)
+	{
+		int32 Next = INDEX_NONE;
+		if (Attackers[a].TargetIdx != INDEX_NONE)
+		{
+			if (const int32* OppPtr = AttackerByHandle.Find(Candidates[Attackers[a].TargetIdx].Handle))
+			{
+				Next = *OppPtr;
+			}
+		}
+		CycleNext[a] = Next;
+	}
+
+	int32 Mark = 0;
+	for (int32 Start = 0; Start < Num; ++Start)
+	{
+		if (CycleClassified[Start])
+		{
+			continue;
+		}
+
+		++Mark;
+		CyclePath.Reset();
+
+		int32 Cur = Start;
+		while (Cur != INDEX_NONE && !CycleClassified[Cur] && CyclePathMark[Cur] != Mark)
+		{
+			CyclePathMark[Cur] = Mark;
+			CyclePath.Add(Cur);
+			Cur = CycleNext[Cur];
+		}
+
+		if (Cur != INDEX_NONE && CyclePathMark[Cur] == Mark)
+		{
+			int32 CycleStart = 0;
+			while (CyclePath[CycleStart] != Cur)
+			{
+				++CycleStart;
+			}
+			for (int32 i = CycleStart; i < CyclePath.Num(); ++i)
+			{
+				InCycle[CyclePath[i]] = 1;
+			}
+		}
+
+		for (int32 Node : CyclePath)
+		{
+			CycleClassified[Node] = 1;
+		}
+	}
+}
+
 void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
 {
 	AttackerByHandle.Reset();
@@ -416,54 +481,17 @@ void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
 		AttackerByHandle.Add(Attackers[a].Handle, a);
 	}
 
-	for (FMCAttacker& At : Attackers)
+	DetectMutualCycles();
+
+	for (int32 a = 0; a < Attackers.Num(); ++a)
 	{
+		FMCAttacker& At = Attackers[a];
 		FMCTargetingFragment* Targeting = At.Targeting;
 		if (At.TargetIdx != INDEX_NONE)
 		{
 			const FMCTargetCandidate& Cand = Candidates[At.TargetIdx];
 			const int32 SlotIndex = FMath::Max(0, Targeting->SlotIndex);
-			FVector SlotLocation = ComputeSlotLocation(Cand, SlotIndex);
-
-			bool bReverse = false;
-			if (const int32* OppPtr = AttackerByHandle.Find(Cand.Handle))
-			{
-				const FMCAttacker& Opp = Attackers[*OppPtr];
-				if (Opp.TargetIdx != INDEX_NONE && Candidates[Opp.TargetIdx].Handle == At.Handle)
-				{
-					// Mutual targeting: decide which side takes the reversed slot.
-					// One-sided -> the newcomer reverses; both held it -> keep prior; neither -> higher entity index reverses.
-					const bool bMeWasTargeting = At.PrevTarget == Cand.Handle;
-					const bool bOppWasTargeting = Opp.PrevTarget == At.Handle;
-
-					if (bOppWasTargeting && !bMeWasTargeting)
-					{
-						bReverse = true;
-					}
-					else if (bMeWasTargeting && !bOppWasTargeting)
-					{
-						bReverse = false;
-					}
-					else if (bMeWasTargeting && bOppWasTargeting)
-					{
-						bReverse = Targeting->bReverseSlot != 0;
-					}
-					else
-					{
-						bReverse = At.EntityIndex > Opp.EntityIndex;
-					}
-
-					if (bReverse)
-					{
-						if (const int32* MeCandPtr = HandleToCand.Find(At.Handle))
-						{
-							const FVector AnchorOffset = ComputeSlotLocation(Candidates[*MeCandPtr], FMath::Max(0, Opp.Targeting->SlotIndex)) - At.Location;
-							SlotLocation = Cand.Location - AnchorOffset;
-						}
-					}
-				}
-			}
-			Targeting->bReverseSlot = bReverse;
+			FVector SlotLocation = InCycle[a] ? Cand.Location : ComputeSlotLocation(Cand, SlotIndex);
 
 			Targeting->bHasTarget = true;
 			Targeting->CurrentTarget = Cand.Handle;
@@ -490,7 +518,6 @@ void UMCTargetingProcessor::WriteResults(UWorld* World, bool bDrawSlots)
 			Targeting->bHasTarget = false;
 			Targeting->CurrentTarget = FMassEntityHandle();
 			Targeting->SlotIndex = INDEX_NONE;
-			Targeting->bReverseSlot = 0;
 			Targeting->TargetLocation = FVector::ZeroVector;
 			Targeting->SlotLocation = FVector::ZeroVector;
 			Targeting->DistanceToTarget = TNumericLimits<float>::Max();
