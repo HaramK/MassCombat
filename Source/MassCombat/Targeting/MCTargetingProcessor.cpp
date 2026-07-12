@@ -6,6 +6,7 @@
 #include "MassCommonFragments.h"
 #include "MassCommonTypes.h"
 #include "Core/MCTargetingSettings.h"
+#include "MassNavigationSubsystem.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
 
@@ -54,6 +55,8 @@ void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 	UWorld* World = EntityManager.GetWorld();
 	const float Now = World ? World->GetTimeSeconds() : 0.f;
 	const bool bDrawSlots = CVarDrawTargetSlots.GetValueOnGameThread();
+
+	NavSubsystem = World ? World->GetSubsystem<UMassNavigationSubsystem>() : nullptr;
 
 	const UMCTargetingSettings* Settings = GetDefault<UMCTargetingSettings>();
 	const float CombatWindow = Settings->CombatWindow;
@@ -120,9 +123,9 @@ void UMCTargetingProcessor::GatherAttackers(FMassExecutionContext& Context)
 		const int32 Num = Ctx.GetNumEntities();
 		for (int32 i = 0; i < Num; ++i)
 		{
-			Attackers.Add({ Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Targetings[i].SlotIndex, Targetings[i].NextRetargetTime,
+			Attackers.Add({ Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Targetings[i].SlotIndex, INDEX_NONE, Targetings[i].NextRetargetTime,
 				Ctx.GetEntity(i), Targetings[i].CurrentTarget,
-				Engagements[i].LastAttackerUnit, Engagements[i].LastDamagedTime, Engagements[i].LastAttackTime, Params.bPreferPlayerTarget, PlayerRadiusSq });
+				Engagements[i].LastAttackerUnit, Engagements[i].LastDamagedTime, Engagements[i].LastAttackTime, Params.bPreferPlayerTarget, PlayerRadiusSq, Params.TargetSearchRadius });
 		}
 	});
 }
@@ -263,6 +266,8 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 
 void UMCTargetingProcessor::AssignOpenTargets()
 {
+	TArray<FMassNavigationObstacleItem, TInlineAllocator<64>> Nearby;
+
 	for (FMCAttacker& At : Attackers)
 	{
 		if (At.TargetIdx != INDEX_NONE)
@@ -270,31 +275,55 @@ void UMCTargetingProcessor::AssignOpenTargets()
 			continue;
 		}
 
+		const float SearchRadiusSq = At.SearchRadius * At.SearchRadius;
+
 		int32 BestOpen = INDEX_NONE;
-		float BestOpenDistSq = TNumericLimits<float>::Max();
+		float BestOpenDistSq = SearchRadiusSq;
+		int32 BestAny = INDEX_NONE;
+		float BestAnyDistSq = SearchRadiusSq;
 
-		for (int32 c = 0; c < Candidates.Num(); ++c)
+		if (NavSubsystem)
 		{
-			if (Candidates[c].Faction == At.Faction)
-			{
-				continue;
-			}
+			Nearby.Reset();
+			const FVector Extent(At.SearchRadius, At.SearchRadius, 0.f);
+			const FBox QueryBox(At.Location - Extent, At.Location + Extent);
+			NavSubsystem->GetObstacleGrid().Query(QueryBox, Nearby);
 
-			if (CandTargetsPlayer[c])
+			for (const FMassNavigationObstacleItem& Item : Nearby)
 			{
-				continue;
-			}
+				const int32* Ci = HandleToCand.Find(Item.Entity);
+				if (!Ci)
+				{
+					continue;
+				}
 
-			if (AssignedCount[c] < Candidates[c].MaxAttackers)
-			{
+				const int32 c = *Ci;
+				if (Candidates[c].Faction == At.Faction)
+				{
+					continue;
+				}
+
 				const float DistSq = FVector::DistSquared(At.Location, Candidates[c].Location);
-				if (DistSq < BestOpenDistSq)
+				if (DistSq >= SearchRadiusSq)
+				{
+					continue;
+				}
+
+				if (DistSq < BestAnyDistSq)
+				{
+					BestAnyDistSq = DistSq;
+					BestAny = c;
+				}
+
+				if (!CandTargetsPlayer[c] && AssignedCount[c] < Candidates[c].MaxAttackers && DistSq < BestOpenDistSq)
 				{
 					BestOpenDistSq = DistSq;
 					BestOpen = c;
 				}
 			}
 		}
+
+		At.NearestEnemyIdx = BestAny;
 
 		const int32 Chosen = BestOpen;
 		if (Chosen != INDEX_NONE)
@@ -533,27 +562,12 @@ void UMCTargetingProcessor::WriteResults(FMassExecutionContext& Context, UWorld*
 				Targeting.DistanceToTarget = TNumericLimits<float>::Max();
 				Targeting.DistanceToSlot = TNumericLimits<float>::Max();
 
-				int32 BestEnemy = INDEX_NONE;
-				float BestEnemyDistSq = TNumericLimits<float>::Max();
-				for (int32 c = 0; c < Candidates.Num(); ++c)
-				{
-					if (Candidates[c].Faction == At.Faction)
-					{
-						continue;
-					}
-					const float DistSq = FVector::DistSquared(At.Location, Candidates[c].Location);
-					if (DistSq < BestEnemyDistSq)
-					{
-						BestEnemyDistSq = DistSq;
-						BestEnemy = c;
-					}
-				}
-
+				const int32 BestEnemy = At.NearestEnemyIdx;
 				if (BestEnemy != INDEX_NONE)
 				{
 					Targeting.bHasNearestEnemy = true;
 					Targeting.NearestEnemyLocation = Candidates[BestEnemy].Location;
-					Targeting.DistanceToNearestEnemy = FMath::Sqrt(BestEnemyDistSq);
+					Targeting.DistanceToNearestEnemy = FVector::Dist(At.Location, Candidates[BestEnemy].Location);
 				}
 				else
 				{
