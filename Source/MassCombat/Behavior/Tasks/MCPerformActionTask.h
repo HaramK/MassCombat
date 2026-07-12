@@ -39,6 +39,9 @@ struct FMCPerformActionInstanceData
 	int32 ActionIndex = INDEX_NONE;
 
 	UPROPERTY()
+	FMassEntityHandle LockedTarget;
+
+	UPROPERTY()
 	TArray<FMCActionTrackCursor> Cursors;
 };
 
