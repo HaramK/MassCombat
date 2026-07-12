@@ -21,11 +21,12 @@ struct FMCTargetCandidate
 
 struct FMCAttacker
 {
-	FMCTargetingFragment* Targeting;
 	FVector Location;
 	uint8 Faction;
 	int32 EntityIndex;
 	int32 TargetIdx;
+	int32 SlotIndex;
+	float NextRetargetTime;
 	FMassEntityHandle Handle;
 	FMassEntityHandle PrevTarget;
 	FMassEntityHandle LastAttackerUnit;
@@ -56,7 +57,7 @@ protected:
 	void AssignOpenTargets();
 	void AssignSlots();
 	void DetectMutualCycles();
-	void WriteResults(UWorld* World, bool bDrawSlots);
+	void WriteResults(FMassExecutionContext& Context, UWorld* World, bool bDrawSlots);
 
 	FMassEntityQuery GatherQuery;
 	FMassEntityQuery EntityQuery;
@@ -75,4 +76,5 @@ protected:
 	TArray<uint8> CycleClassified;
 	TArray<int32> CyclePathMark;
 	TArray<int32> CyclePath;
+	TArray<bool> SlotOccupied;
 };
