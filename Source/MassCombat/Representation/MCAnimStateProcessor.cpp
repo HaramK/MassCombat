@@ -1,5 +1,5 @@
 #include "Representation/MCAnimStateProcessor.h"
-#include "Combat/MCCombatFragments.h"
+#include "Representation/MCRepresentationFragments.h"
 #include "Representation/MCAnimInstance.h"
 #include "GameFramework/Character.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -28,7 +28,7 @@ void UMCAnimStateProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager
 	EntityQuery.AddRequirement<FMCAnimStateFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FMassRepresentationFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddRequirement<FMassActorFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::Optional);
-	EntityQuery.AddConstSharedRequirement<FMCCombatParams>();
+	EntityQuery.AddConstSharedRequirement<FMCAnimParams>();
 }
 
 void UMCAnimStateProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
@@ -38,7 +38,7 @@ void UMCAnimStateProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 
 	EntityQuery.ForEachEntityChunk(Context, [this, GlobalTime](FMassExecutionContext& Ctx)
 	{
-		const FMCCombatParams& Params = Ctx.GetConstSharedFragment<FMCCombatParams>();
+		const FMCAnimParams& Params = Ctx.GetConstSharedFragment<FMCAnimParams>();
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
 		const TConstArrayView<FMassVelocityFragment> Velocities = Ctx.GetFragmentView<FMassVelocityFragment>();
 		const TArrayView<FMCAnimStateFragment> Anims = Ctx.GetMutableFragmentView<FMCAnimStateFragment>();

@@ -1,5 +1,5 @@
 #include "Representation/MCUpdateISMAnimProcessor.h"
-#include "Combat/MCCombatFragments.h"
+#include "Representation/MCRepresentationFragments.h"
 #include "MassExecutionContext.h"
 #include "MassRepresentationSubsystem.h"
 #include "MassRepresentationFragments.h"

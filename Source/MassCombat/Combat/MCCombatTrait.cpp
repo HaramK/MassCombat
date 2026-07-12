@@ -1,4 +1,5 @@
 #include "Combat/MCCombatTrait.h"
+#include "Combat/MCCombatFragments.h"
 #include "MassEntityTemplateRegistry.h"
 #include "MassEntityManager.h"
 #include "MassCommonFragments.h"
@@ -14,6 +15,6 @@ void UMCCombatTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext
 	BuildContext.AddFragment<FMCAnimStateFragment>();
 
 	FMassEntityManager& EntityManager = UE::Mass::Utils::GetEntityManagerChecked(World);
-	const FConstSharedStruct ParamsFragment = EntityManager.GetOrCreateConstSharedFragment(Params);
-	BuildContext.AddConstSharedFragment(ParamsFragment);
+	BuildContext.AddConstSharedFragment(EntityManager.GetOrCreateConstSharedFragment(TargetingParams));
+	BuildContext.AddConstSharedFragment(EntityManager.GetOrCreateConstSharedFragment(AnimParams));
 }

@@ -2,10 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
-#include "MCCombatSettings.generated.h"
+#include "MCTargetingSettings.generated.h"
 
-UCLASS(config = Game, defaultconfig, meta = (DisplayName = "MC Combat"))
-class MASSCOMBAT_API UMCCombatSettings : public UDeveloperSettings
+UCLASS(config = Game, defaultconfig, meta = (DisplayName = "MC Targeting"))
+class MASSCOMBAT_API UMCTargetingSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 

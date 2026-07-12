@@ -1,5 +1,6 @@
 #include "Action/MCActionStep.h"
 #include "Combat/MCCombatFragments.h"
+#include "Representation/MCRepresentationFragments.h"
 #include "Unit/MCUnitFragments.h"
 #include "Animation/AnimMontage.h"
 #include "Engine/Engine.h"

@@ -1,10 +1,11 @@
 #include "Targeting/MCTargetingProcessor.h"
+#include "Targeting/MCTargetingFragments.h"
 #include "Combat/MCCombatFragments.h"
 #include "Unit/MCUnitFragments.h"
 #include "MassExecutionContext.h"
 #include "MassCommonFragments.h"
 #include "MassCommonTypes.h"
-#include "Core/MCCombatSettings.h"
+#include "Core/MCTargetingSettings.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
 
@@ -31,7 +32,7 @@ void UMCTargetingProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddRequirement<FMCCombatFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddConstSharedRequirement<FMCUnitInfoFragment>();
-	EntityQuery.AddConstSharedRequirement<FMCCombatParams>();
+	EntityQuery.AddConstSharedRequirement<FMCTargetingParams>();
 }
 
 namespace
@@ -52,7 +53,7 @@ void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 	const float Now = World ? World->GetTimeSeconds() : 0.f;
 	const bool bDrawSlots = CVarDrawTargetSlots.GetValueOnGameThread();
 
-	const UMCCombatSettings* Settings = GetDefault<UMCCombatSettings>();
+	const UMCTargetingSettings* Settings = GetDefault<UMCTargetingSettings>();
 	const float CombatWindow = Settings->CombatWindow;
 	const float RetargetInterval = Settings->RetargetInterval;
 
@@ -108,7 +109,7 @@ void UMCTargetingProcessor::GatherAttackers(FMassExecutionContext& Context)
 	EntityQuery.ForEachEntityChunk(Context, [this](FMassExecutionContext& Ctx)
 	{
 		const uint8 Faction = Ctx.GetConstSharedFragment<FMCUnitInfoFragment>().Faction;
-		const FMCCombatParams& Params = Ctx.GetConstSharedFragment<FMCCombatParams>();
+		const FMCTargetingParams& Params = Ctx.GetConstSharedFragment<FMCTargetingParams>();
 		const float PlayerRadiusSq = Params.PlayerTargetRadius * Params.PlayerTargetRadius;
 		const TConstArrayView<FTransformFragment> Transforms = Ctx.GetFragmentView<FTransformFragment>();
 		const TArrayView<FMCCombatFragment> Combats = Ctx.GetMutableFragmentView<FMCCombatFragment>();

@@ -3,6 +3,7 @@
 #include "Action/MCActionDef.h"
 #include "Action/MCActionStep.h"
 #include "Combat/MCCombatFragments.h"
+#include "Representation/MCRepresentationFragments.h"
 #include "StateTreeExecutionContext.h"
 #include "StateTreeLinker.h"
 #include "MassStateTreeDependency.h"
