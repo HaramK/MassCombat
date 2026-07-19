@@ -45,4 +45,7 @@ struct FMCTargetingParams : public FMassConstSharedFragment
 
 	UPROPERTY(EditAnywhere, Category = "Targeting")
 	float TargetSearchRadius = 3000.f;
+
+	UPROPERTY(EditAnywhere, Category = "Targeting")
+	float NearTargetSearchRadius = 800.f;
 };

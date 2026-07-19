@@ -70,6 +70,7 @@ void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 	const UMCTargetingSettings* Settings = GetDefault<UMCTargetingSettings>();
 	const float CombatWindow = Settings->CombatWindow;
 	const float RetargetInterval = Settings->RetargetInterval;
+	const float EmptySearchBackoff = Settings->EmptySearchBackoffMultiplier;
 
 	GatherCandidates(Context);
 	GatherAttackers(Context);
@@ -82,7 +83,7 @@ void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 
 	AssignPlayerTargets(PlayerCandIdx);
 	AssignReturningTargets(Now, CombatWindow, RetargetInterval);
-	AssignOpenTargets(Now, RetargetInterval);
+	AssignOpenTargets(Now, RetargetInterval, EmptySearchBackoff);
 	AssignSlots();
 	WriteResults(Context, World, bDrawSlots);
 }
@@ -134,7 +135,8 @@ void UMCTargetingProcessor::GatherAttackers(FMassExecutionContext& Context)
 		{
 			Attackers.Add({ Transforms[i].GetTransform().GetLocation(), Faction, Ctx.GetEntity(i).Index, INDEX_NONE, Targetings[i].SlotIndex, INDEX_NONE, Targetings[i].NextRetargetTime,
 				Ctx.GetEntity(i), Targetings[i].CurrentTarget,
-				Engagements[i].LastAttackerUnit, Engagements[i].LastDamagedTime, Engagements[i].LastAttackTime, Params.bPreferPlayerTarget, PlayerRadiusSq, Params.TargetSearchRadius });
+				Engagements[i].LastAttackerUnit, Engagements[i].LastDamagedTime, Engagements[i].LastAttackTime, Params.bPreferPlayerTarget, PlayerRadiusSq, Params.TargetSearchRadius,
+				Params.NearTargetSearchRadius });
 		}
 	});
 }
@@ -273,7 +275,7 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 	}
 }
 
-void UMCTargetingProcessor::AssignOpenTargets(float Now, float RetargetInterval)
+void UMCTargetingProcessor::AssignOpenTargets(float Now, float RetargetInterval, float EmptySearchBackoff)
 {
 	SCOPE_CYCLE_COUNTER(STAT_MC_TargetingOpenSearch);
 
@@ -300,10 +302,10 @@ void UMCTargetingProcessor::AssignOpenTargets(float Now, float RetargetInterval)
 		int32 BestAny = INDEX_NONE;
 		float BestAnyDistSq = SearchRadiusSq;
 
-		if (NavSubsystem)
+		auto ScanBox = [this, &Nearby, &At, SearchRadiusSq, &BestOpen, &BestOpenDistSq, &BestAny, &BestAnyDistSq](float Radius)
 		{
 			Nearby.Reset();
-			const FVector Extent(At.SearchRadius, At.SearchRadius, 0.f);
+			const FVector Extent(Radius, Radius, 0.f);
 			const FBox QueryBox(At.Location - Extent, At.Location + Extent);
 			NavSubsystem->GetObstacleGrid().Query(QueryBox, Nearby);
 			INC_DWORD_STAT(STAT_MC_TargetingOpenSearchQueries);
@@ -341,6 +343,21 @@ void UMCTargetingProcessor::AssignOpenTargets(float Now, float RetargetInterval)
 					BestOpen = c;
 				}
 			}
+		};
+
+		if (NavSubsystem)
+		{
+			ScanBox(FMath::Min(At.NearSearchRadius, At.SearchRadius));
+			if (BestAny == INDEX_NONE && At.NearSearchRadius < At.SearchRadius)
+			{
+				ScanBox(At.SearchRadius);
+			}
+		}
+
+		if (BestAny == INDEX_NONE)
+		{
+			// Nothing within full radius: back off so empty terrain isn't rescanned at combat cadence.
+			At.NextRetargetTime = Now + (RetargetInterval + FMath::FRandRange(0.f, RetargetInterval)) * EmptySearchBackoff;
 		}
 
 		At.NearestEnemyIdx = BestAny;

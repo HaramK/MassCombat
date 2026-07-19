@@ -15,4 +15,7 @@ public:
 
 	UPROPERTY(config, EditAnywhere, Category = "Targeting")
 	float RetargetInterval = 1.f;
+
+	UPROPERTY(config, EditAnywhere, Category = "Targeting", meta = (ClampMin = "1.0"))
+	float EmptySearchBackoffMultiplier = 3.f;
 };

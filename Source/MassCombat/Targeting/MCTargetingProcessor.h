@@ -37,6 +37,7 @@ struct FMCAttacker
 	bool bPreferPlayer;
 	float PlayerRadiusSq;
 	float SearchRadius;
+	float NearSearchRadius;
 	bool bSearched = false;
 };
 
@@ -58,7 +59,7 @@ protected:
 	void MarkPlayerTargetedCandidates(int32 PlayerCandIdx);
 	void AssignPlayerTargets(int32 PlayerCandIdx);
 	void AssignReturningTargets(float Now, float CombatWindow, float RetargetInterval);
-	void AssignOpenTargets(float Now, float RetargetInterval);
+	void AssignOpenTargets(float Now, float RetargetInterval, float EmptySearchBackoff);
 	void AssignSlots();
 	void DetectMutualCycles();
 	void WriteResults(FMassExecutionContext& Context, UWorld* World, bool bDrawSlots);
