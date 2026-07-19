@@ -63,13 +63,21 @@ void UMCDamageResolutionProcessor::Execute(FMassEntityManager& EntityManager, FM
 		}
 		Unit->Health -= Event.Amount;
 
+		// Wake the target only when this hit can change its tree state: a killing blow, or the
+		// first hit since the last hit-react (flips the DamageTaken condition false -> true).
+		bool bCanTransition = Unit->Health <= 0.f;
+
 		if (FMCEngagementFragment* Engagement = EntityManager.GetFragmentDataPtr<FMCEngagementFragment>(Event.Target))
 		{
+			bCanTransition |= Engagement->LastDamagedTime <= Engagement->LastHitReactTime;
 			Engagement->LastAttackerUnit = Event.Instigator;
 			Engagement->LastDamagedTime = Now;
 		}
 
-		DamagedEntities.Add(Event.Target);
+		if (bCanTransition)
+		{
+			DamagedEntities.Add(Event.Target);
+		}
 	}
 
 	if (DamagedEntities.Num() > 0)
