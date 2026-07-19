@@ -113,12 +113,38 @@ void UMCTargetingProcessor::GatherCandidates(FMassExecutionContext& Context)
 		}
 	});
 
-	HandleToCand.Reset();
-	HandleToCand.Reserve(Candidates.Num());
+	int32 MaxEntityIndex = INDEX_NONE;
+	for (const FMCTargetCandidate& Cand : Candidates)
+	{
+		MaxEntityIndex = FMath::Max(MaxEntityIndex, Cand.Handle.Index);
+	}
+	CandByEntityIndex.SetNumUninitialized(FMath::Max(CandByEntityIndex.Num(), MaxEntityIndex + 1));
+	FMemory::Memset(CandByEntityIndex.GetData(), 0xFF, CandByEntityIndex.Num() * sizeof(int32));
 	for (int32 c = 0; c < Candidates.Num(); ++c)
 	{
-		HandleToCand.Add(Candidates[c].Handle, c);
+		CandByEntityIndex[Candidates[c].Handle.Index] = c;
 	}
+}
+
+int32 UMCTargetingProcessor::FindCandidateIndex(FMassEntityHandle Handle) const
+{
+	if (!CandByEntityIndex.IsValidIndex(Handle.Index))
+	{
+		return INDEX_NONE;
+	}
+	const int32 c = CandByEntityIndex[Handle.Index];
+	// The dense array is keyed by entity index only; compare full handles to reject recycled indices.
+	return (c != INDEX_NONE && Candidates[c].Handle == Handle) ? c : INDEX_NONE;
+}
+
+int32 UMCTargetingProcessor::FindAttackerIndex(FMassEntityHandle Handle) const
+{
+	if (!AttackerByEntityIndex.IsValidIndex(Handle.Index))
+	{
+		return INDEX_NONE;
+	}
+	const int32 a = AttackerByEntityIndex[Handle.Index];
+	return (a != INDEX_NONE && Attackers[a].Handle == Handle) ? a : INDEX_NONE;
 }
 
 void UMCTargetingProcessor::BuildFactionGrids()
@@ -247,9 +273,10 @@ void UMCTargetingProcessor::MarkPlayerTargetedCandidates(int32 PlayerCandIdx)
 	{
 		if (A.PrevTarget == PlayerHandle)
 		{
-			if (const int32* Ci = HandleToCand.Find(A.Handle))
+			const int32 Ci = FindCandidateIndex(A.Handle);
+			if (Ci != INDEX_NONE)
 			{
-				CandTargetsPlayer[*Ci] = true;
+				CandTargetsPlayer[Ci] = true;
 			}
 		}
 	}
@@ -311,32 +338,32 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 		}
 
 		const FMassEntityHandle OldTarget = At.PrevTarget;
-		const int32* OldFound = OldTarget.IsSet() ? HandleToCand.Find(OldTarget) : nullptr;
-		const bool bOldValid = OldFound && (Candidates[*OldFound].Faction != At.Faction) && !CandTargetsPlayer[*OldFound];
+		const int32 OldFound = OldTarget.IsSet() ? FindCandidateIndex(OldTarget) : INDEX_NONE;
+		const bool bOldValid = OldFound != INDEX_NONE && (Candidates[OldFound].Faction != At.Faction) && !CandTargetsPlayer[OldFound];
 
 		const FMassEntityHandle Attacker = At.LastAttackerUnit;
-		const int32* AtkFound = (Attacker.IsSet() && Attacker != OldTarget) ? HandleToCand.Find(Attacker) : nullptr;
-		const bool bRetaliate = AtkFound && (Candidates[*AtkFound].Faction != At.Faction)
-			&& !CandTargetsPlayer[*AtkFound]
+		const int32 AtkFound = (Attacker.IsSet() && Attacker != OldTarget) ? FindCandidateIndex(Attacker) : INDEX_NONE;
+		const bool bRetaliate = AtkFound != INDEX_NONE && (Candidates[AtkFound].Faction != At.Faction)
+			&& !CandTargetsPlayer[AtkFound]
 			&& ((Now - At.LastDamagedTime) < CombatWindow)
-			&& (AssignedCount[*AtkFound] < Candidates[*AtkFound].MaxAttackers);
+			&& (AssignedCount[AtkFound] < Candidates[AtkFound].MaxAttackers);
 
 		if (bRetaliate)
 		{
-			if (!bOldValid || *AtkFound != *OldFound)
+			if (!bOldValid || AtkFound != OldFound)
 			{
 				At.SlotIndex = INDEX_NONE;
 			}
-			At.TargetIdx = *AtkFound;
-			++AssignedCount[*AtkFound];
+			At.TargetIdx = AtkFound;
+			++AssignedCount[AtkFound];
 			continue;
 		}
 
 		const bool bRealCombat = bOldValid && (((Now - At.LastAttackTime) < CombatWindow) || ((Now - At.LastDamagedTime) < CombatWindow));
-		if (bRealCombat && AssignedCount[*OldFound] < Candidates[*OldFound].MaxAttackers)
+		if (bRealCombat && AssignedCount[OldFound] < Candidates[OldFound].MaxAttackers)
 		{
-			At.TargetIdx = *OldFound;
-			++AssignedCount[*OldFound];
+			At.TargetIdx = OldFound;
+			++AssignedCount[OldFound];
 			continue;
 		}
 
@@ -346,10 +373,10 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 			continue;
 		}
 
-		if (AssignedCount[*OldFound] < Candidates[*OldFound].MaxAttackers)
+		if (AssignedCount[OldFound] < Candidates[OldFound].MaxAttackers)
 		{
-			At.TargetIdx = *OldFound;
-			++AssignedCount[*OldFound];
+			At.TargetIdx = OldFound;
+			++AssignedCount[OldFound];
 		}
 	}
 }
@@ -460,11 +487,11 @@ void UMCTargetingProcessor::AssignOpenTargets(float Now, float RetargetInterval,
 		if (Chosen != INDEX_NONE)
 		{
 			const FMassEntityHandle OldTarget = At.PrevTarget;
-			const int32* OldFound = OldTarget.IsSet() ? HandleToCand.Find(OldTarget) : nullptr;
+			const int32 OldFound = OldTarget.IsSet() ? FindCandidateIndex(OldTarget) : INDEX_NONE;
 
 			At.TargetIdx = Chosen;
 			++AssignedCount[Chosen];
-			if (!OldFound || *OldFound != Chosen)
+			if (OldFound != Chosen)
 			{
 				At.SlotIndex = INDEX_NONE;
 			}
@@ -588,10 +615,7 @@ void UMCTargetingProcessor::DetectMutualCycles()
 		int32 Next = INDEX_NONE;
 		if (Attackers[a].TargetIdx != INDEX_NONE)
 		{
-			if (const int32* OppPtr = AttackerByHandle.Find(Candidates[Attackers[a].TargetIdx].Handle))
-			{
-				Next = *OppPtr;
-			}
+			Next = FindAttackerIndex(Candidates[Attackers[a].TargetIdx].Handle);
 		}
 		CycleNext[a] = Next;
 	}
@@ -639,11 +663,16 @@ void UMCTargetingProcessor::WriteResults(FMassExecutionContext& Context, UWorld*
 {
 	SCOPE_CYCLE_COUNTER(STAT_MC_TargetingWrite);
 
-	AttackerByHandle.Reset();
-	AttackerByHandle.Reserve(Attackers.Num());
+	int32 MaxEntityIndex = INDEX_NONE;
+	for (const FMCAttacker& At : Attackers)
+	{
+		MaxEntityIndex = FMath::Max(MaxEntityIndex, At.Handle.Index);
+	}
+	AttackerByEntityIndex.SetNumUninitialized(FMath::Max(AttackerByEntityIndex.Num(), MaxEntityIndex + 1));
+	FMemory::Memset(AttackerByEntityIndex.GetData(), 0xFF, AttackerByEntityIndex.Num() * sizeof(int32));
 	for (int32 a = 0; a < Attackers.Num(); ++a)
 	{
-		AttackerByHandle.Add(Attackers[a].Handle, a);
+		AttackerByEntityIndex[Attackers[a].Handle.Index] = a;
 	}
 
 	DetectMutualCycles();
@@ -690,6 +719,16 @@ void UMCTargetingProcessor::WriteResults(FMassExecutionContext& Context, UWorld*
 			}
 			else
 			{
+				// Idle targetless entity: the fragment already holds this state; only the self-distance moves.
+				if (!Targeting.bHasTarget && !At.bSearched)
+				{
+					if (Targeting.bHasNearestEnemy)
+					{
+						Targeting.DistanceToNearestEnemy = FVector::Dist(At.Location, Targeting.NearestEnemyLocation);
+					}
+					continue;
+				}
+
 				Targeting.bHasTarget = false;
 				Targeting.CurrentTarget = FMassEntityHandle();
 				Targeting.SlotIndex = INDEX_NONE;

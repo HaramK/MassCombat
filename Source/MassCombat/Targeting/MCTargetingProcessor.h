@@ -75,13 +75,16 @@ protected:
 	void DetectMutualCycles();
 	void WriteResults(FMassExecutionContext& Context, UWorld* World, bool bDrawSlots);
 
+	int32 FindCandidateIndex(FMassEntityHandle Handle) const;
+	int32 FindAttackerIndex(FMassEntityHandle Handle) const;
+
 	FMassEntityQuery GatherQuery;
 	FMassEntityQuery EntityQuery;
 
 	TArray<FMCTargetCandidate> Candidates;
 	TArray<FMCAttacker> Attackers;
-	TMap<FMassEntityHandle, int32> HandleToCand;
-	TMap<FMassEntityHandle, int32> AttackerByHandle;
+	TArray<int32> CandByEntityIndex;
+	TArray<int32> AttackerByEntityIndex;
 	TArray<int32> AssignedCount;
 	TArray<bool> CandTargetsPlayer;
 	TArray<int32> Contenders;
