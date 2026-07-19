@@ -12,6 +12,7 @@ namespace UE::MassBehavior
 struct FTransformFragment;
 struct FMassMoveTargetFragment;
 struct FMassVelocityFragment;
+struct FMassRepresentationLODFragment;
 class UMassSignalSubsystem;
 
 USTRUCT()
@@ -46,5 +47,6 @@ protected:
 	TStateTreeExternalDataHandle<FTransformFragment> TransformHandle;
 	TStateTreeExternalDataHandle<FMassMoveTargetFragment> MoveTargetHandle;
 	TStateTreeExternalDataHandle<FMassVelocityFragment> VelocityHandle;
+	TStateTreeExternalDataHandle<FMassRepresentationLODFragment> RepresentationLODHandle;
 	TStateTreeExternalDataHandle<UMassSignalSubsystem> MassSignalSubsystemHandle;
 };

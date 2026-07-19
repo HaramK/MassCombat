@@ -184,7 +184,7 @@ bool FMCMoveToTargetTask::UpdateShortPath(FStateTreeExecutionContext& Context) c
 void FMCMoveToTargetTask::ScheduleNextTick(FStateTreeExecutionContext& Context, float Delay) const
 {
 	const FMassRepresentationLODFragment& RepLOD = Context.GetExternalData(RepresentationLODHandle);
-	Delay *= GetLODTickScale(RepLOD.LOD);
+	Delay *= GetLODTickScale(RepLOD.LOD) * FMath::FRandRange(1.f, 1.25f);
 
 	FMassStateTreeExecutionContext& MassContext = static_cast<FMassStateTreeExecutionContext&>(Context);
 	UMassSignalSubsystem& SignalSubsystem = Context.GetExternalData(MassSignalSubsystemHandle);
