@@ -39,18 +39,28 @@ bool FMCDistanceCondition::TestCondition(FStateTreeExecutionContext& Context) co
 	const FInstanceDataType& Data = Context.GetInstanceData(*this);
 	const FMCTargetingFragment& Targeting = Context.GetExternalData(TargetingHandle);
 
+	bool bValid;
 	float Dist;
 	switch (Data.Source)
 	{
 	case EMCDistanceSource::NearestEnemy:
+		bValid = Targeting.bHasNearestEnemy != 0;
 		Dist = Targeting.DistanceToNearestEnemy;
 		break;
 	case EMCDistanceSource::TargetSlot:
+		bValid = Targeting.bHasTarget != 0;
 		Dist = Targeting.DistanceToSlot;
 		break;
 	default:
+		bValid = Targeting.bHasTarget != 0;
 		Dist = Targeting.DistanceToTarget;
 		break;
+	}
+
+	// No subject: the condition is false regardless of invert ("near"/"far" both presuppose one).
+	if (!bValid)
+	{
+		return false;
 	}
 
 	const bool bClose = Dist <= Data.Distance;
