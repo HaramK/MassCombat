@@ -7,7 +7,6 @@
 #include "MassCommonFragments.h"
 #include "MassCommonTypes.h"
 #include "Core/MCTargetingSettings.h"
-#include "MassNavigationSubsystem.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
 
@@ -65,14 +64,13 @@ void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 	const float Now = World ? World->GetTimeSeconds() : 0.f;
 	const bool bDrawSlots = CVarDrawTargetSlots.GetValueOnGameThread();
 
-	NavSubsystem = World ? World->GetSubsystem<UMassNavigationSubsystem>() : nullptr;
-
 	const UMCTargetingSettings* Settings = GetDefault<UMCTargetingSettings>();
 	const float CombatWindow = Settings->CombatWindow;
 	const float RetargetInterval = Settings->RetargetInterval;
 	const float EmptySearchBackoff = Settings->EmptySearchBackoffMultiplier;
 
 	GatherCandidates(Context);
+	BuildFactionGrids();
 	GatherAttackers(Context);
 
 	AssignedCount.Reset();
@@ -114,6 +112,77 @@ void UMCTargetingProcessor::GatherCandidates(FMassExecutionContext& Context)
 	for (int32 c = 0; c < Candidates.Num(); ++c)
 	{
 		HandleToCand.Add(Candidates[c].Handle, c);
+	}
+}
+
+void UMCTargetingProcessor::BuildFactionGrids()
+{
+	constexpr float MinCellSize = 600.f;
+	constexpr int32 MaxCellsPerAxis = 128;
+
+	GridFactions.Reset();
+	CandGridSlot.SetNumUninitialized(Candidates.Num());
+	CandGridCell.SetNumUninitialized(Candidates.Num());
+
+	TArray<FVector2D, TInlineAllocator<8>> BoundsMin;
+	TArray<FVector2D, TInlineAllocator<8>> BoundsMax;
+	TArray<int32, TInlineAllocator<8>> Counts;
+
+	for (int32 c = 0; c < Candidates.Num(); ++c)
+	{
+		const FVector2D P(Candidates[c].Location);
+		int32 Slot = GridFactions.IndexOfByKey(Candidates[c].Faction);
+		if (Slot == INDEX_NONE)
+		{
+			Slot = GridFactions.Add(Candidates[c].Faction);
+			BoundsMin.Add(P);
+			BoundsMax.Add(P);
+			Counts.Add(0);
+		}
+		BoundsMin[Slot] = FVector2D::Min(BoundsMin[Slot], P);
+		BoundsMax[Slot] = FVector2D::Max(BoundsMax[Slot], P);
+		++Counts[Slot];
+		CandGridSlot[c] = Slot;
+	}
+
+	FactionGrids.SetNum(GridFactions.Num());
+	for (int32 g = 0; g < FactionGrids.Num(); ++g)
+	{
+		FMCCandidateGrid& G = FactionGrids[g];
+		const FVector2D Extent = BoundsMax[g] - BoundsMin[g];
+		G.Origin = BoundsMin[g];
+		G.CellSize = FMath::Max3(MinCellSize, float(Extent.X) / MaxCellsPerAxis, float(Extent.Y) / MaxCellsPerAxis);
+		G.CellsX = FMath::Clamp(int32(Extent.X / G.CellSize) + 1, 1, MaxCellsPerAxis);
+		G.CellsY = FMath::Clamp(int32(Extent.Y / G.CellSize) + 1, 1, MaxCellsPerAxis);
+		G.CellStart.Reset();
+		G.CellStart.SetNumZeroed(G.CellsX * G.CellsY + 1);
+		G.Items.SetNumUninitialized(Counts[g]);
+	}
+
+	for (int32 c = 0; c < Candidates.Num(); ++c)
+	{
+		FMCCandidateGrid& G = FactionGrids[CandGridSlot[c]];
+		const int32 X = FMath::Clamp(int32((Candidates[c].Location.X - G.Origin.X) / G.CellSize), 0, G.CellsX - 1);
+		const int32 Y = FMath::Clamp(int32((Candidates[c].Location.Y - G.Origin.Y) / G.CellSize), 0, G.CellsY - 1);
+		const int32 Cell = Y * G.CellsX + X;
+		CandGridCell[c] = Cell;
+		++G.CellStart[Cell + 1];
+	}
+
+	for (FMCCandidateGrid& G : FactionGrids)
+	{
+		for (int32 i = 1; i < G.CellStart.Num(); ++i)
+		{
+			G.CellStart[i] += G.CellStart[i - 1];
+		}
+		G.Cursor.SetNumUninitialized(G.CellsX * G.CellsY);
+		FMemory::Memcpy(G.Cursor.GetData(), G.CellStart.GetData(), G.Cursor.Num() * sizeof(int32));
+	}
+
+	for (int32 c = 0; c < Candidates.Num(); ++c)
+	{
+		FMCCandidateGrid& G = FactionGrids[CandGridSlot[c]];
+		G.Items[G.Cursor[CandGridCell[c]]++] = c;
 	}
 }
 
@@ -279,8 +348,6 @@ void UMCTargetingProcessor::AssignOpenTargets(float Now, float RetargetInterval,
 {
 	SCOPE_CYCLE_COUNTER(STAT_MC_TargetingOpenSearch);
 
-	TArray<FMassNavigationObstacleItem, TInlineAllocator<64>> Nearby;
-
 	for (FMCAttacker& At : Attackers)
 	{
 		if (At.TargetIdx != INDEX_NONE)
@@ -302,56 +369,73 @@ void UMCTargetingProcessor::AssignOpenTargets(float Now, float RetargetInterval,
 		int32 BestAny = INDEX_NONE;
 		float BestAnyDistSq = SearchRadiusSq;
 
-		auto ScanBox = [this, &Nearby, &At, SearchRadiusSq, &BestOpen, &BestOpenDistSq, &BestAny, &BestAnyDistSq](float Radius)
+		auto ScanBox = [this, &At, SearchRadiusSq, &BestOpen, &BestOpenDistSq, &BestAny, &BestAnyDistSq](float Radius)
 		{
-			Nearby.Reset();
-			const FVector Extent(Radius, Radius, 0.f);
-			const FBox QueryBox(At.Location - Extent, At.Location + Extent);
-			NavSubsystem->GetObstacleGrid().Query(QueryBox, Nearby);
 			INC_DWORD_STAT(STAT_MC_TargetingOpenSearchQueries);
-			INC_DWORD_STAT_BY(STAT_MC_TargetingOpenSearchItems, Nearby.Num());
+			int32 ItemsScanned = 0;
 
-			for (const FMassNavigationObstacleItem& Item : Nearby)
+			for (int32 g = 0; g < FactionGrids.Num(); ++g)
 			{
-				const int32* Ci = HandleToCand.Find(Item.Entity);
-				if (!Ci)
+				if (GridFactions[g] == At.Faction)
+				{
+					continue;
+				}
+				const FMCCandidateGrid& G = FactionGrids[g];
+
+				const int32 X0 = FMath::FloorToInt32((At.Location.X - Radius - G.Origin.X) / G.CellSize);
+				const int32 X1 = FMath::FloorToInt32((At.Location.X + Radius - G.Origin.X) / G.CellSize);
+				const int32 Y0 = FMath::FloorToInt32((At.Location.Y - Radius - G.Origin.Y) / G.CellSize);
+				const int32 Y1 = FMath::FloorToInt32((At.Location.Y + Radius - G.Origin.Y) / G.CellSize);
+				if (X1 < 0 || Y1 < 0 || X0 >= G.CellsX || Y0 >= G.CellsY)
 				{
 					continue;
 				}
 
-				const int32 c = *Ci;
-				if (Candidates[c].Faction == At.Faction)
-				{
-					continue;
-				}
+				const int32 CX0 = FMath::Max(X0, 0);
+				const int32 CX1 = FMath::Min(X1, G.CellsX - 1);
+				const int32 CY0 = FMath::Max(Y0, 0);
+				const int32 CY1 = FMath::Min(Y1, G.CellsY - 1);
 
-				const float DistSq = FVector::DistSquared(At.Location, Candidates[c].Location);
-				if (DistSq >= SearchRadiusSq)
+				for (int32 Y = CY0; Y <= CY1; ++Y)
 				{
-					continue;
-				}
+					const int32 RowBase = Y * G.CellsX;
+					for (int32 X = CX0; X <= CX1; ++X)
+					{
+						const int32 Cell = RowBase + X;
+						for (int32 i = G.CellStart[Cell]; i < G.CellStart[Cell + 1]; ++i)
+						{
+							const int32 c = G.Items[i];
+							++ItemsScanned;
 
-				if (DistSq < BestAnyDistSq)
-				{
-					BestAnyDistSq = DistSq;
-					BestAny = c;
-				}
+							const float DistSq = FVector::DistSquared(At.Location, Candidates[c].Location);
+							if (DistSq >= SearchRadiusSq)
+							{
+								continue;
+							}
 
-				if (!CandTargetsPlayer[c] && AssignedCount[c] < Candidates[c].MaxAttackers && DistSq < BestOpenDistSq)
-				{
-					BestOpenDistSq = DistSq;
-					BestOpen = c;
+							if (DistSq < BestAnyDistSq)
+							{
+								BestAnyDistSq = DistSq;
+								BestAny = c;
+							}
+
+							if (!CandTargetsPlayer[c] && AssignedCount[c] < Candidates[c].MaxAttackers && DistSq < BestOpenDistSq)
+							{
+								BestOpenDistSq = DistSq;
+								BestOpen = c;
+							}
+						}
+					}
 				}
 			}
+
+			INC_DWORD_STAT_BY(STAT_MC_TargetingOpenSearchItems, ItemsScanned);
 		};
 
-		if (NavSubsystem)
+		ScanBox(FMath::Min(At.NearSearchRadius, At.SearchRadius));
+		if (BestAny == INDEX_NONE && At.NearSearchRadius < At.SearchRadius)
 		{
-			ScanBox(FMath::Min(At.NearSearchRadius, At.SearchRadius));
-			if (BestAny == INDEX_NONE && At.NearSearchRadius < At.SearchRadius)
-			{
-				ScanBox(At.SearchRadius);
-			}
+			ScanBox(At.SearchRadius);
 		}
 
 		if (BestAny == INDEX_NONE)
