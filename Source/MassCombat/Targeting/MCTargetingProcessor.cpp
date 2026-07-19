@@ -1,4 +1,5 @@
 #include "Targeting/MCTargetingProcessor.h"
+#include "Debug/MCStats.h"
 #include "Targeting/MCTargetingFragments.h"
 #include "Combat/MCCombatFragments.h"
 #include "Unit/MCUnitFragments.h"
@@ -51,8 +52,15 @@ namespace
 	}
 }
 
+DECLARE_CYCLE_STAT(TEXT("Targeting Execute"), STAT_MC_TargetingExecute, STATGROUP_MassCombat);
+DECLARE_CYCLE_STAT(TEXT("Targeting OpenSearch"), STAT_MC_TargetingOpenSearch, STATGROUP_MassCombat);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Targeting OpenSearch Queries"), STAT_MC_TargetingOpenSearchQueries, STATGROUP_MassCombat);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Targeting OpenSearch Items"), STAT_MC_TargetingOpenSearchItems, STATGROUP_MassCombat);
+
 void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_TargetingExecute);
+
 	UWorld* World = EntityManager.GetWorld();
 	const float Now = World ? World->GetTimeSeconds() : 0.f;
 	const bool bDrawSlots = CVarDrawTargetSlots.GetValueOnGameThread();
@@ -74,7 +82,7 @@ void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 
 	AssignPlayerTargets(PlayerCandIdx);
 	AssignReturningTargets(Now, CombatWindow, RetargetInterval);
-	AssignOpenTargets();
+	AssignOpenTargets(Now, RetargetInterval);
 	AssignSlots();
 	WriteResults(Context, World, bDrawSlots);
 }
@@ -251,9 +259,9 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 			continue;
 		}
 
+		// No valid target or retarget due: fall through to the gated open search, which owns the cadence bump.
 		if (!bOldValid || Now >= At.NextRetargetTime)
 		{
-			At.NextRetargetTime = Now + RetargetInterval + FMath::FRandRange(0.f, RetargetInterval);
 			continue;
 		}
 
@@ -265,8 +273,10 @@ void UMCTargetingProcessor::AssignReturningTargets(float Now, float CombatWindow
 	}
 }
 
-void UMCTargetingProcessor::AssignOpenTargets()
+void UMCTargetingProcessor::AssignOpenTargets(float Now, float RetargetInterval)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_TargetingOpenSearch);
+
 	TArray<FMassNavigationObstacleItem, TInlineAllocator<64>> Nearby;
 
 	for (FMCAttacker& At : Attackers)
@@ -275,6 +285,13 @@ void UMCTargetingProcessor::AssignOpenTargets()
 		{
 			continue;
 		}
+
+		if (Now < At.NextRetargetTime)
+		{
+			continue;
+		}
+		At.NextRetargetTime = Now + RetargetInterval + FMath::FRandRange(0.f, RetargetInterval);
+		At.bSearched = true;
 
 		const float SearchRadiusSq = At.SearchRadius * At.SearchRadius;
 
@@ -289,6 +306,8 @@ void UMCTargetingProcessor::AssignOpenTargets()
 			const FVector Extent(At.SearchRadius, At.SearchRadius, 0.f);
 			const FBox QueryBox(At.Location - Extent, At.Location + Extent);
 			NavSubsystem->GetObstacleGrid().Query(QueryBox, Nearby);
+			INC_DWORD_STAT(STAT_MC_TargetingOpenSearchQueries);
+			INC_DWORD_STAT_BY(STAT_MC_TargetingOpenSearchItems, Nearby.Num());
 
 			for (const FMassNavigationObstacleItem& Item : Nearby)
 			{
@@ -564,18 +583,27 @@ void UMCTargetingProcessor::WriteResults(FMassExecutionContext& Context, UWorld*
 				Targeting.DistanceToTarget = TNumericLimits<float>::Max();
 				Targeting.DistanceToSlot = TNumericLimits<float>::Max();
 
-				const int32 BestEnemy = At.NearestEnemyIdx;
-				if (BestEnemy != INDEX_NONE)
+				// NearestEnemyIdx only points into this frame's Candidates when a search ran;
+				// on gated frames keep the fragment's last result and just refresh the distance.
+				if (At.bSearched)
 				{
-					Targeting.bHasNearestEnemy = true;
-					Targeting.NearestEnemyLocation = Candidates[BestEnemy].Location;
-					Targeting.DistanceToNearestEnemy = FVector::Dist(At.Location, Candidates[BestEnemy].Location);
+					const int32 BestEnemy = At.NearestEnemyIdx;
+					if (BestEnemy != INDEX_NONE)
+					{
+						Targeting.bHasNearestEnemy = true;
+						Targeting.NearestEnemyLocation = Candidates[BestEnemy].Location;
+						Targeting.DistanceToNearestEnemy = FVector::Dist(At.Location, Candidates[BestEnemy].Location);
+					}
+					else
+					{
+						Targeting.bHasNearestEnemy = false;
+						Targeting.NearestEnemyLocation = FVector::ZeroVector;
+						Targeting.DistanceToNearestEnemy = TNumericLimits<float>::Max();
+					}
 				}
-				else
+				else if (Targeting.bHasNearestEnemy)
 				{
-					Targeting.bHasNearestEnemy = false;
-					Targeting.NearestEnemyLocation = FVector::ZeroVector;
-					Targeting.DistanceToNearestEnemy = TNumericLimits<float>::Max();
+					Targeting.DistanceToNearestEnemy = FVector::Dist(At.Location, Targeting.NearestEnemyLocation);
 				}
 			}
 		}
