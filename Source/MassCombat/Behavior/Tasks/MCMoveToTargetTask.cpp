@@ -1,4 +1,5 @@
 #include "Behavior/Tasks/MCMoveToTargetTask.h"
+#include "Debug/MCStats.h"
 #include "StateTreeExecutionContext.h"
 #include "StateTreeLinker.h"
 #include "MassStateTreeDependency.h"
@@ -13,6 +14,12 @@
 #include "NavigationSystem.h"
 #include "NavigationData.h"
 #include "DrawDebugHelpers.h"
+
+DECLARE_CYCLE_STAT(TEXT("RequestPath"), STAT_MC_RequestPath, STATGROUP_MassCombat);
+DECLARE_CYCLE_STAT(TEXT("RequestPath FindPath"), STAT_MC_FindPath, STATGROUP_MassCombat);
+DECLARE_CYCLE_STAT(TEXT("RequestPath BuildCorridor"), STAT_MC_BuildCorridor, STATGROUP_MassCombat);
+DECLARE_DWORD_COUNTER_STAT(TEXT("RequestPath Count"), STAT_MC_RequestPathCount, STATGROUP_MassCombat);
+DECLARE_DWORD_COUNTER_STAT(TEXT("RequestPath Failed"), STAT_MC_RequestPathFailed, STATGROUP_MassCombat);
 
 static TAutoConsoleVariable<bool> CVarDrawMoveGoal(
 	TEXT("mc.DrawMoveGoal"),
@@ -78,6 +85,9 @@ void FMCMoveToTargetTask::GetDependencies(UE::MassBehavior::FStateTreeDependency
 
 bool FMCMoveToTargetTask::RequestPath(FStateTreeExecutionContext& Context) const
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_RequestPath);
+	INC_DWORD_STAT(STAT_MC_RequestPathCount);
+
 	const FInstanceDataType& Data = Context.GetInstanceData(*this);
 	const FMCTargetingFragment& Targeting = Context.GetExternalData(TargetingHandle);
 	const FAgentRadiusFragment& AgentRadius = Context.GetExternalData(AgentRadiusHandle);
@@ -87,6 +97,7 @@ bool FMCMoveToTargetTask::RequestPath(FStateTreeExecutionContext& Context) const
 	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 	if (!NavSys)
 	{
+		INC_DWORD_STAT(STAT_MC_RequestPathFailed);
 		return false;
 	}
 
@@ -94,6 +105,7 @@ bool FMCMoveToTargetTask::RequestPath(FStateTreeExecutionContext& Context) const
 	const ANavigationData* NavData = NavSys->GetNavDataForProps(NavAgentProps, AgentLocation);
 	if (!NavData)
 	{
+		INC_DWORD_STAT(STAT_MC_RequestPathFailed);
 		return false;
 	}
 
@@ -106,17 +118,20 @@ bool FMCMoveToTargetTask::RequestPath(FStateTreeExecutionContext& Context) const
 	FPathFindingResult Result(ENavigationQueryResult::Error);
 	if (Query.NavData.IsValid())
 	{
+		SCOPE_CYCLE_COUNTER(STAT_MC_FindPath);
 		Result = Query.NavData->FindPath(NavAgentProps, Query);
 	}
 
 	if (!Result.IsSuccessful() || !Result.Path.IsValid())
 	{
+		INC_DWORD_STAT(STAT_MC_RequestPathFailed);
 		return false;
 	}
 
 	Result.Path->RemoveOverlappingPoints(FNavCorridor::OverlappingPointTolerance);
 	if (Result.Path->GetPathPoints().Num() <= 1)
 	{
+		INC_DWORD_STAT(STAT_MC_RequestPathFailed);
 		return false;
 	}
 
@@ -129,7 +144,10 @@ bool FMCMoveToTargetTask::RequestPath(FStateTreeExecutionContext& Context) const
 	FNavCorridorParams CorridorParams;
 	CorridorParams.SetFromWidth(Data.CorridorWidth);
 	CorridorParams.PathOffsetFromBoundaries = Data.OffsetFromBoundaries;
-	CachedPath.Corridor->BuildFromPath(*CachedPath.NavPath, Filter, CorridorParams);
+	{
+		SCOPE_CYCLE_COUNTER(STAT_MC_BuildCorridor);
+		CachedPath.Corridor->BuildFromPath(*CachedPath.NavPath, Filter, CorridorParams);
+	}
 
 	FMassNavMeshShortPathFragment& ShortPath = Context.GetExternalData(ShortPathHandle);
 	ShortPath.RequestShortPath(CachedPath.Corridor, 0, 0, Data.EndDistanceThreshold);
