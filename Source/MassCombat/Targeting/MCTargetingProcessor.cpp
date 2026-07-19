@@ -52,7 +52,11 @@ namespace
 }
 
 DECLARE_CYCLE_STAT(TEXT("Targeting Execute"), STAT_MC_TargetingExecute, STATGROUP_MassCombat);
+DECLARE_CYCLE_STAT(TEXT("Targeting Gather"), STAT_MC_TargetingGather, STATGROUP_MassCombat);
+DECLARE_CYCLE_STAT(TEXT("Targeting BuildGrids"), STAT_MC_TargetingBuildGrids, STATGROUP_MassCombat);
 DECLARE_CYCLE_STAT(TEXT("Targeting OpenSearch"), STAT_MC_TargetingOpenSearch, STATGROUP_MassCombat);
+DECLARE_CYCLE_STAT(TEXT("Targeting Slots"), STAT_MC_TargetingSlots, STATGROUP_MassCombat);
+DECLARE_CYCLE_STAT(TEXT("Targeting Write"), STAT_MC_TargetingWrite, STATGROUP_MassCombat);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Targeting OpenSearch Queries"), STAT_MC_TargetingOpenSearchQueries, STATGROUP_MassCombat);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Targeting OpenSearch Items"), STAT_MC_TargetingOpenSearchItems, STATGROUP_MassCombat);
 
@@ -88,6 +92,8 @@ void UMCTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 
 void UMCTargetingProcessor::GatherCandidates(FMassExecutionContext& Context)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_TargetingGather);
+
 	Candidates.Reset();
 
 	GatherQuery.ForEachEntityChunk(Context, [this](FMassExecutionContext& Ctx)
@@ -117,6 +123,8 @@ void UMCTargetingProcessor::GatherCandidates(FMassExecutionContext& Context)
 
 void UMCTargetingProcessor::BuildFactionGrids()
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_TargetingBuildGrids);
+
 	constexpr float MinCellSize = 600.f;
 	constexpr int32 MaxCellsPerAxis = 128;
 
@@ -188,6 +196,8 @@ void UMCTargetingProcessor::BuildFactionGrids()
 
 void UMCTargetingProcessor::GatherAttackers(FMassExecutionContext& Context)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_TargetingGather);
+
 	Attackers.Reset();
 
 	EntityQuery.ForEachEntityChunk(Context, [this](FMassExecutionContext& Ctx)
@@ -464,6 +474,8 @@ void UMCTargetingProcessor::AssignOpenTargets(float Now, float RetargetInterval,
 
 void UMCTargetingProcessor::AssignSlots()
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_TargetingSlots);
+
 	if (Groups.Num() < Candidates.Num())
 	{
 		Groups.SetNum(Candidates.Num());
@@ -625,6 +637,8 @@ void UMCTargetingProcessor::DetectMutualCycles()
 
 void UMCTargetingProcessor::WriteResults(FMassExecutionContext& Context, UWorld* World, bool bDrawSlots)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_TargetingWrite);
+
 	AttackerByHandle.Reset();
 	AttackerByHandle.Reserve(Attackers.Num());
 	for (int32 a = 0; a < Attackers.Num(); ++a)

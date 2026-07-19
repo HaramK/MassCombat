@@ -1,4 +1,5 @@
 #include "Movement/MCOrientationIntentProcessor.h"
+#include "Debug/MCStats.h"
 #include "Movement/MCOrientationFragments.h"
 #include "Targeting/MCTargetingFragments.h"
 #include "Combat/MCCombatFragments.h"
@@ -27,8 +28,12 @@ void UMCOrientationIntentProcessor::ConfigureQueries(const TSharedRef<FMassEntit
 	EntityQuery.AddRequirement<FMassMoveTargetFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::Optional);
 }
 
+DECLARE_CYCLE_STAT(TEXT("OrientationIntent Execute"), STAT_MC_OrientationExecute, STATGROUP_MassCombat);
+
 void UMCOrientationIntentProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_OrientationExecute);
+
 	UWorld* World = EntityManager.GetWorld();
 	if (!World)
 	{

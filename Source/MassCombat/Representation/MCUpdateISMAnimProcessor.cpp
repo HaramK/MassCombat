@@ -1,4 +1,5 @@
 #include "Representation/MCUpdateISMAnimProcessor.h"
+#include "Debug/MCStats.h"
 #include "Representation/MCRepresentationFragments.h"
 #include "MassExecutionContext.h"
 #include "MassRepresentationSubsystem.h"
@@ -22,8 +23,12 @@ void UMCUpdateISMAnimProcessor::ConfigureQueries(const TSharedRef<FMassEntityMan
 	EntityQuery.AddRequirement<FMCAnimStateFragment>(EMassFragmentAccess::ReadWrite);
 }
 
+DECLARE_CYCLE_STAT(TEXT("UpdateISMAnim Execute"), STAT_MC_UpdateISMAnimExecute, STATGROUP_MassCombat);
+
 void UMCUpdateISMAnimProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_UpdateISMAnimExecute);
+
 	UWorld* World = EntityManager.GetWorld();
 
 	EntityQuery.ForEachEntityChunk(Context, [this, World](FMassExecutionContext& Context)

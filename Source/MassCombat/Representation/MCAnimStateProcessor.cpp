@@ -1,4 +1,5 @@
 #include "Representation/MCAnimStateProcessor.h"
+#include "Debug/MCStats.h"
 #include "Representation/MCRepresentationFragments.h"
 #include "Representation/MCAnimInstance.h"
 #include "GameFramework/Character.h"
@@ -31,8 +32,12 @@ void UMCAnimStateProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager
 	EntityQuery.AddConstSharedRequirement<FMCAnimParams>();
 }
 
+DECLARE_CYCLE_STAT(TEXT("AnimState Execute"), STAT_MC_AnimStateExecute, STATGROUP_MassCombat);
+
 void UMCAnimStateProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_AnimStateExecute);
+
 	UWorld* World = EntityManager.GetWorld();
 	const float GlobalTime = World ? World->GetTimeSeconds() : 0.f;
 

@@ -1,4 +1,5 @@
 #include "Combat/MCDamageResolutionProcessor.h"
+#include "Debug/MCStats.h"
 #include "Combat/MCDamageSubsystem.h"
 #include "Combat/MCCombatFragments.h"
 #include "Unit/MCUnitFragments.h"
@@ -23,8 +24,12 @@ void UMCDamageResolutionProcessor::ConfigureQueries(const TSharedRef<FMassEntity
 	EntityQuery.AddRequirement<FMCEngagementFragment>(EMassFragmentAccess::ReadWrite);
 }
 
+DECLARE_CYCLE_STAT(TEXT("DamageResolution Execute"), STAT_MC_DamageResolutionExecute, STATGROUP_MassCombat);
+
 void UMCDamageResolutionProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_DamageResolutionExecute);
+
 	UWorld* World = EntityManager.GetWorld();
 	UMCDamageSubsystem* DamageSubsystem = World ? World->GetSubsystem<UMCDamageSubsystem>() : nullptr;
 	if (!DamageSubsystem)

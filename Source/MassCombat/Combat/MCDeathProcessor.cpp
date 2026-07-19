@@ -1,4 +1,5 @@
 #include "Combat/MCDeathProcessor.h"
+#include "Debug/MCStats.h"
 #include "Combat/MCCombatFragments.h"
 #include "Combat/MCCombatEventsSubsystem.h"
 #include "Unit/MCUnitFragments.h"
@@ -31,8 +32,12 @@ void UMCDeathProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& E
 	CleanupQuery.AddTagRequirement<FMCDeadTag>(EMassFragmentPresence::All);
 }
 
+DECLARE_CYCLE_STAT(TEXT("Death Execute"), STAT_MC_DeathExecute, STATGROUP_MassCombat);
+
 void UMCDeathProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MC_DeathExecute);
+
 	UWorld* World = EntityManager.GetWorld();
 	const float Now = World ? World->GetTimeSeconds() : 0.f;
 	const float Duration = DeathDuration;
