@@ -1,4 +1,5 @@
 #include "Combat/MCPlayerCombatLibrary.h"
+#include "Combat/MCCombatFragments.h"
 #include "Unit/MCUnitFragments.h"
 #include "MassEntitySubsystem.h"
 #include "MassActorSubsystem.h"
@@ -100,6 +101,7 @@ int32 UMCPlayerCombatLibrary::PlayerMeleeAttack(AActor* PlayerActor, float Range
 	FMassEntityQuery Query(EntityManager.AsShared());
 	Query.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
 	Query.AddRequirement<FMCUnitFragment>(EMassFragmentAccess::ReadOnly);
+	Query.AddTagRequirement<FMCDeadTag>(EMassFragmentPresence::None);
 	Query.AddConstSharedRequirement<FMCUnitInfoFragment>();
 
 	FMassExecutionContext Context(EntityManager);
