@@ -470,7 +470,7 @@ void UMCTargetingProcessor::AssignOpenTargets(float Now, float RetargetInterval,
 		};
 
 		ScanBox(FMath::Min(At.NearSearchRadius, At.SearchRadius));
-		if (BestAny == INDEX_NONE && At.NearSearchRadius < At.SearchRadius)
+		if (BestOpen == INDEX_NONE && At.NearSearchRadius < At.SearchRadius)
 		{
 			ScanBox(At.SearchRadius);
 		}
