@@ -1,7 +1,7 @@
 # MassCombat
 
 A large-scale, crowd-combat sandbox built on **Unreal Engine 5.7** with the **Mass** framework.
-Hundreds of agents fight in melee using a data-oriented entity pipeline (Mass), per-entity AI driven by **StateTree**, GPU-skinned crowd rendering via **Vertex Animation Textures (VAT)**, and a lightweight, GAS-inspired **Action System** authored entirely as Mass-native data.
+Thousands of agents fight in melee using a data-oriented entity pipeline (Mass), per-entity AI driven by **StateTree**, GPU-skinned crowd rendering via **Vertex Animation Textures (VAT)**, and a lightweight, GAS-inspired **Action System** authored entirely as Mass-native data.
 
 > Built with: Mass (Entity / Gameplay / AI / Crowd / Representation / LOD), StateTree + GameplayStateTree, Navigation/Avoidance, GameplayTags.
 
@@ -64,7 +64,7 @@ The core problem in crowd melee is *"who attacks whom, and from where."* This is
 1. **Gather candidates & attackers** — every targetable unit and every attacker is collected with its faction, location, and slot capacity.
 2. **Player-priority pass** — attackers flagged `bPreferPlayerTarget` snap to the player when within `PlayerTargetRadius`.
 3. **Returning targets** — during a combat window, attackers keep their previous target and re-evaluate only on `NextRetargetTime`, avoiding target thrash.
-4. **Open assignment** — remaining attackers pick the nearest valid enemy that still has free slots, searching only within `TargetSearchRadius`. The nearby-enemy lookup reuses the engine's existing **navigation obstacle hash grid** (`UMassNavigationSubsystem`) instead of an all-vs-all scan, so cost scales with local density rather than total unit count.
+4. **Open assignment** — remaining attackers pick the nearest valid enemy that still has free slots, searching only within `TargetSearchRadius`. The lookup runs on **per-faction candidate grids** rebuilt each frame (counting-sort cell layout — two allocations, no per-cell arrays), queried in two stages: a near radius first, the full radius only if that finds nothing, with an empty-search backoff so units in empty terrain stop rescanning at combat cadence.
 5. **Slot assignment** — attackers around a target are packed into slots `0..MaxAttackerCounts-1`:
    - **Stable mode** keeps each attacker's existing slot and only fills the gaps left by the fallen.
    - **Recalc mode** (`bRecalcSlotsOnAttackerLoss`) redistributes slots deterministically by entity index when an attacker is lost.
@@ -200,7 +200,7 @@ This is a focused crowd-combat sandbox; several areas are intentionally out of s
 | **Simple health model** | Health is a single float with direct damage — no armor, mitigation, or GAS-style attribute stacks. |
 | **Single-player** | Mass replication is not implemented; the focus is local crowd simulation. |
 | **Limited animation states** | Fixed idle/walk/attack state indices, no blend spaces (a constraint of the VAT pipeline). |
-| **Bounded target search** | NPCs acquire targets only within `TargetSearchRadius` (via the reused navigation grid); there is no global aggro. |
+| **Bounded target search** | NPCs acquire targets only within `TargetSearchRadius` (via the per-faction candidate grids); there is no global aggro. |
 | **Two-faction model** | Faction is a `uint8`; complex alliance relationships are not modeled. |
 
 **Possible next steps:** auto-derive state indices from anim metadata, ranged actions, and Mass network replication.
